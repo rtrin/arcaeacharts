@@ -312,7 +312,7 @@ const Index = () => {
           </div>
         </div>
       </header>
-      <main className="container px-4 lg:px-0">
+      <main className="container px-4 md:px-24 lg:px-48">
         <section aria-labelledby="filters" className="mb-6">
           <h2 id="filters" className="sr-only">
             Filters
@@ -363,7 +363,7 @@ const Index = () => {
             </div>
 
             {/* Sort and Filter Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 width:75%">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               {/* Sort Controls */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground mr-1 sm:mr-0">
@@ -433,48 +433,12 @@ const Index = () => {
                   </Button>
                 ))}
               </div>
-
-              {/* Difficulty Range Slider - Visible on large screens */}
-              <div className="hidden lg:flex lg:items-center lg:gap-4 lg:flex-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">
-                    Constant Range:
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <Badge
-                      variant="secondary"
-                      aria-label="Current min difficulty"
-                    >
-                      {difficultyRange[0]}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">–</span>
-                    <Badge
-                      variant="secondary"
-                      aria-label="Current max difficulty"
-                    >
-                      {difficultyRange[1]}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <Slider
-                    value={difficultyRange}
-                    onValueChange={(val) =>
-                      setDifficultyRange([val[0], val[1]] as [number, number])
-                    }
-                    min={1}
-                    max={12}
-                    step={0.1}
-                    aria-label="Difficulty range"
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* Difficulty Range Slider - Below on smaller screens */}
-            <div className="space-y-2 lg:hidden">
+            {/* Constant Range - Own row */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>Difficulty</span>
+                <span>Constant range</span>
                 <span>
                   <Badge
                     variant="secondary"
@@ -523,7 +487,7 @@ const Index = () => {
                 {paginatedSongs.map((song, index) => (
                   <li
                     key={`${song.title}-${song.difficulty}-${song.version}-${index}`}
-                    className="group p-4 rounded-lg border bg-card hover:border-ring transition-all duration-200"
+                    className="group p-4 rounded-lg border bg-card transition-all duration-200"
                   >
                     <article className="flex items-center gap-4">
                       {/* Left Section: Image + Info */}
@@ -534,7 +498,7 @@ const Index = () => {
                           height={80}
                           loading="lazy"
                           alt={`Cover art: ${song.title} by ${song.artist}`}
-                          className="h-20 w-20 rounded-md object-cover ring-1 ring-border group-hover:ring-ring transition"
+                          className="h-20 w-20 rounded-md object-cover ring-1 ring-border transition"
                         />
                         <div className="flex-1 min-w-0">
                           <h3 className="text-lg md:text-xl font-semibold truncate">
@@ -674,23 +638,16 @@ const Index = () => {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <footer className="w-full py-8 mt-auto text-center text-md text-gray-500">
-        <div className="flex flex-col items-center gap-2">
+      <footer className="w-full py-8 mt-auto text-center text-md text-muted-foreground">
+        <div className="flex flex-col items-center gap-3">
           <div className="flex flex-row items-center gap-2">
-            Arcaea Charts by 8bits
-            <span>·</span>
-            <a
-              href="https://github.com/rtrinh760/arcaeacharts"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-gray-700 mr-2"
-            >
-              GitHub
-            </a>
+            <span className="font-medium text-foreground">Arcaea Charts</span>
             <a
               href="https://ko-fi.com/S6S41JCXEZ"
               target="_blank"
               rel="noopener noreferrer"
+              className="opacity-80 hover:opacity-100 transition-opacity"
+              aria-label="Support on Ko-fi"
             >
               <img
                 src="https://storage.ko-fi.com/cdn/kofi5.png?v=6"
@@ -699,6 +656,12 @@ const Index = () => {
               />
             </a>
           </div>
+          <p className="text-sm max-w-xs">
+            Made for the Arcaea community.
+          </p>
+          <p className="text-xs opacity-75">
+            Song data from Arcaea © lowiro · {new Date().getFullYear()}
+          </p>
         </div>
       </footer>
 
