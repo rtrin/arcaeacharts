@@ -45,23 +45,18 @@ const Index = () => {
 
 
 
-  // Play rating calculation formula (commented out)
-  // const calculateRequiredScore = (constant: number, targetRating: number): number => {
-  //   const requiredModifier = targetRating - constant;
-  //   
-  //   if (requiredModifier >= 2.0) {
-  //     return 10000000;
-  //   }
-  //   
-  //   if (requiredModifier >= 1.0) {
-  //     return Math.round(9800000 + (requiredModifier - 1.0) * 200000);
-  //   }
-  //   
-  //   const calculatedScore = Math.round(9500000 + requiredModifier * 300000);
-  //   
-  //   return Math.max(0, Math.min(9800000, calculatedScore));
-  // };
+  // Score modifier: ≥10M -> 2.0; 9.8M–9.999M -> 1 + (score-9800000)/200000; ≤9.8M -> (score-9500000)/300000
+  const calculateScoreModifier = (score: number): number => {
+    if (score >= 10000000) return 2.0;
+    if (score >= 9800000) return 1.0 + (score - 9800000) / 200000;
+    return (score - 9500000) / 300000;
+  };
 
+  // Play rating = max(constant + score modifier, 0)
+  const calculatePlayRating = (constant: number, score: number): number => {
+    const modifier = calculateScoreModifier(score);
+    return Math.max(constant + modifier, 0);
+  };
 
 
 
@@ -487,27 +482,27 @@ const Index = () => {
                 {paginatedSongs.map((song, index) => (
                   <li
                     key={`${song.title}-${song.difficulty}-${song.version}-${index}`}
-                    className="group p-4 rounded-lg border bg-card transition-all duration-200"
+                    className="group p-3 sm:p-4 rounded-lg border bg-card transition-all duration-200"
                   >
-                    <article className="flex items-center gap-4">
+                    <article className="flex items-center gap-2 sm:gap-4">
                       {/* Left Section: Image + Info */}
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
                         <img
                           src={getImageUrl(song.imageUrl)}
                           width={80}
                           height={80}
                           loading="lazy"
                           alt={`Cover art: ${song.title} by ${song.artist}`}
-                          className="h-20 w-20 rounded-md object-cover ring-1 ring-border transition"
+                          className="hidden sm:block h-16 sm:h-20 w-16 sm:w-20 rounded-md object-cover ring-1 ring-border transition"
                         />
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-lg md:text-xl font-semibold truncate">
+                          <h3 className="text-base sm:text-sm md:text-lg font-semibold truncate">
                             {song.title}
                           </h3>
-                          <p className="text-sm md:text-md text-muted-foreground truncate">
+                          <p className="text-xs sm:text-xs md:text-sm text-muted-foreground truncate">
                             {song.artist}
                           </p>
-                          <div className="text-xs md:text-sm text-muted-foreground">
+                          <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">
                             {song.version} •{" "}
                             <span
                               style={{
@@ -521,10 +516,37 @@ const Index = () => {
                         </div>
                       </div>
 
+                      {/* Rating column: rating at 9.8M, 9.9M, 10M */}
+                      {song.constant != null && (
+                        <div
+                          className="flex flex-col gap-1 sm:gap-1.5 min-w-[72px] sm:min-w-[90px] md:min-w-[120px] px-2 sm:px-3 py-1.5 sm:py-2 font-mono text-xs sm:text-sm"
+                          aria-label="Play rating at 9.8M, 9.9M, 10M score"
+                        >
+                          <div
+                            className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: "#4e356f" }}
+                          >
+                            Rating
+                          </div>
+                          <div className="flex justify-between gap-2 sm:gap-3 font-medium text-muted-foreground">
+                            <span style={{ color: "#4e356f" }}>980</span>
+                            <span className="text-foreground">{calculatePlayRating(song.constant, 9800000).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between gap-2 sm:gap-3 font-medium text-muted-foreground">
+                            <span style={{ color: "#4e356f" }}>990</span>
+                            <span className="text-foreground">{calculatePlayRating(song.constant, 9900000).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between gap-2 sm:gap-3 font-medium text-muted-foreground">
+                            <span style={{ color: "#4e356f" }}>PM</span>
+                            <span className="text-foreground">{calculatePlayRating(song.constant, 10000000).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Right Section: Level, Constant, Chart View */}
-                      <div className="flex flex-col items-end gap-2 min-w-[140px] md:min-w-[160px]">
+                      <div className="flex flex-col items-end gap-1.5 sm:gap-2 min-w-[100px] sm:min-w-[120px] md:min-w-[160px]">
                         <Badge
-                          className="select-none h-6 md:h-8 w-full justify-center text-xs md:text-sm font-medium font-mono border-2"
+                          className="select-none h-5 sm:h-6 md:h-8 w-full justify-center text-[10px] sm:text-xs md:text-sm font-medium font-mono border-2"
                           style={{
                             backgroundColor: "#4e356f",
                             borderColor: "#4e356f",
@@ -535,24 +557,28 @@ const Index = () => {
                           {"Level:    " + song.level}
                         </Badge>
                         <Badge
-                          className="select-none h-6 md:h-8 w-full justify-center text-xs md:text-sm font-medium font-mono border-2"
+                          className="select-none h-5 sm:h-6 md:h-8 w-full justify-center text-[10px] sm:text-xs md:text-sm font-medium font-mono border-2"
                           style={{
                             backgroundColor: "#f9fafb",
                             borderColor: "#4e356f",
                             color: "#111827",
                           }}
-                          aria-label={`Constant ${song.constant}`}
+                          aria-label={`Constant ${song.constant ?? "—"}`}
                         >
-                          {"Constant: " + song.constant}
+                          {"Constant: " +
+                            (song.constant != null ? song.constant : "TBA")}
                         </Badge>
 
                         <Button
                           onClick={() =>
-                            handleChartView(song.title, song.difficulty)
+                            handleChartView(
+                              song.title ?? "",
+                              song.difficulty ?? ""
+                            )
                           }
                           variant="outline"
                           size="sm"
-                          className="text-xs font-medium bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300 text-red-700 w-full justify-center"
+                          className="text-[10px] sm:text-xs font-medium bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300 text-red-700 w-full justify-center h-7 sm:h-8"
                         >
                           Chart View
                         </Button>
@@ -657,7 +683,7 @@ const Index = () => {
             </a>
           </div>
           <p className="text-sm max-w-xs">
-            Made for the Arcaea community.
+            Made for the Arcaea community
           </p>
           <p className="text-xs opacity-75">
             Song data from Arcaea © lowiro · {new Date().getFullYear()}
