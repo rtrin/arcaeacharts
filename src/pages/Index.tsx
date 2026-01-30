@@ -358,7 +358,7 @@ const Index = () => {
             </div>
 
             {/* Sort and Filter Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               {/* Sort Controls */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground mr-1 sm:mr-0">
