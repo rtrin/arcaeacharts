@@ -7,29 +7,10 @@ const supabaseAnonKey =
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Supabase Storage bucket name for song images
-const STORAGE_BUCKET = 'song-images';
 
-// Get public URL for an image in Supabase Storage
-export const getImageUrl = (imagePath: string): string => {
-  // If it's already a full URL
-  if (imagePath.startsWith('http')) {
-    // Check if it's a Supabase Storage URL
-    if (imagePath.includes('/storage/v1/object/public/')) {
-      return imagePath;
-    }
-    // If it's an external URL (not migrated yet), use CORS proxy as fallback
-    // TODO: Remove CORS proxy once all images are migrated to Supabase Storage
-    return `https://corsproxy.io/?${encodeURIComponent(imagePath)}`;
-  }
-  
-  // If it's a path in storage, construct the public URL
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(imagePath);
-  return data.publicUrl;
-};
 export interface Song {
   id: number;
-  imageUrl: string;
+
   title: string;
   artist: string;
   difficulty: string;
@@ -41,7 +22,7 @@ export interface Song {
 // Summary for caching (includes imageUrl for instant display)
 export interface SongSummary {
   id: number;
-  imageUrl: string;
+
   title: string;
   artist: string;
   difficulty: string;
@@ -97,7 +78,7 @@ export const getAllSummaries = async (): Promise<SongSummary[]> => {
   while (true) {
     const { data, error } = await supabase
       .from("songs")
-      .select("id, imageUrl, title, artist, difficulty, constant, level, version")
+      .select("id, title, artist, difficulty, constant, level, version")
       .range(from, from + pageSize - 1)
       .order("constant", { ascending: false });
 

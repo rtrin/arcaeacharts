@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getSongs, getSongsPaginated, getCachedSummaries, saveSummariesToCache, getImageUrl, type Song } from "@/lib/supabase";
+import { getSongs, getSongsPaginated, getCachedSummaries, saveSummariesToCache, type Song } from "@/lib/supabase";
 import { searchChartViewVideos, type YouTubeVideo } from "@/lib/youtube";
 import { VideoOverlay } from "@/components/VideoOverlay";
 
@@ -151,7 +151,7 @@ const Index = () => {
             // Convert to summaries (includes imageUrl for instant display)
             const summaries = allSongs.map((song) => ({
               id: song.id,
-              imageUrl: song.imageUrl,
+
               title: song.title,
               artist: song.artist,
               difficulty: song.difficulty,
@@ -282,7 +282,7 @@ const Index = () => {
           "@type": "MusicRecording",
           name: s.title,
           byArtist: { "@type": "MusicGroup", name: s.artist },
-          image: s.imageUrl,
+
           genre: "Rhythm Game",
           keywords: `difficulty ${s.difficulty}, constant ${s.constant}, level ${s.level}, version ${s.version}`,
         },
@@ -487,14 +487,7 @@ const Index = () => {
                     <article className="flex items-center gap-2 sm:gap-4">
                       {/* Left Section: Image + Info */}
                       <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
-                        <img
-                          src={getImageUrl(song.imageUrl)}
-                          width={80}
-                          height={80}
-                          loading="lazy"
-                          alt={`Cover art: ${song.title} by ${song.artist}`}
-                          className="hidden sm:block h-16 sm:h-20 w-16 sm:w-20 rounded-md object-cover ring-1 ring-border transition"
-                        />
+
                         <div className="flex-1 min-w-0">
                           <h3 className="text-base sm:text-sm md:text-lg font-semibold truncate">
                             {song.title}
