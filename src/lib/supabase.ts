@@ -14,7 +14,7 @@ export interface Song {
   title: string;
   artist: string;
   difficulty: string;
-  constant: number;
+  constant: number | null;
   level: string;
   version: string;
 }
@@ -26,7 +26,7 @@ export interface SongSummary {
   title: string;
   artist: string;
   difficulty: string;
-  constant: number;
+  constant: number | null;
   level: string;
   version: string;
 }

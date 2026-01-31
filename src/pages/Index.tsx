@@ -218,7 +218,7 @@ const Index = () => {
         }
         return checks.some(Boolean);
       })();
-      const inRange = s.constant >= min && s.constant <= max;
+      const inRange = s.constant !== null && s.constant >= min && s.constant <= max;
       const difficultyMatch =
         selectedDifficulties.length === 0 ||
         selectedDifficulties.includes(s.difficulty);
@@ -233,8 +233,8 @@ const Index = () => {
   // Sort filtered songs
   const sortedSongs = useMemo(() => {
     const sorted = [...filtered].sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
+      let aValue: string | number | null;
+      let bValue: string | number | null;
 
       switch (sortBy) {
         case "constant":
@@ -253,8 +253,12 @@ const Index = () => {
       }
 
       if (sortOrder === "asc") {
+        if (aValue === null) return 1;
+        if (bValue === null) return -1;
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
       } else {
+        if (aValue === null) return 1;
+        if (bValue === null) return -1;
         return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
       }
     });
