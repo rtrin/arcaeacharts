@@ -218,7 +218,7 @@ const Index = () => {
         }
         return checks.some(Boolean);
       })();
-      const inRange = s.constant !== null && s.constant >= min && s.constant <= max;
+      const inRange = s.constant === null || (s.constant >= min && s.constant <= max);
       const difficultyMatch =
         selectedDifficulties.length === 0 ||
         selectedDifficulties.includes(s.difficulty);
