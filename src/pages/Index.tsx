@@ -679,9 +679,6 @@ const Index = () => {
               />
             </a>
           </div>
-          <p className="text-sm max-w-xs">
-            Made for the Arcaea community
-          </p>
           <p className="text-xs opacity-75">
             Song data from Arcaea © lowiro · {new Date().getFullYear()}
           </p>
