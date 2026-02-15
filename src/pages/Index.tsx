@@ -139,7 +139,7 @@ const Index = () => {
 
         // 2. Fetch first page from server (with full data, ordered by constant DESC)
         const { data: firstPage } = await getSongsPaginated(1, 25);
-        
+
         // Update with real data (includes imageUrl)
         setAllSongs(firstPage);
         setLoading(false);
@@ -421,14 +421,14 @@ const Index = () => {
                     {difficulty === "Eternal"
                       ? "ETR"
                       : difficulty === "Beyond"
-                      ? "BYD"
-                      : difficulty === "Past"
-                      ? "PST"
-                      : difficulty === "Present"
-                      ? "PRS"
-                      : difficulty === "Future"
-                      ? "FTR"
-                      : difficulty.slice(0, 3).toUpperCase()}
+                        ? "BYD"
+                        : difficulty === "Past"
+                          ? "PST"
+                          : difficulty === "Present"
+                            ? "PRS"
+                            : difficulty === "Future"
+                              ? "FTR"
+                              : difficulty.slice(0, 3).toUpperCase()}
                   </Button>
                 ))}
               </div>
@@ -681,6 +681,9 @@ const Index = () => {
           </div>
           <p className="text-xs opacity-75">
             Song data from Arcaea © lowiro · {new Date().getFullYear()}
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Tip: Use <strong>Guided Access</strong> to prevent accidental exits.
           </p>
         </div>
       </footer>

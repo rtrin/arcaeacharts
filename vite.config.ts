@@ -124,7 +124,11 @@ function apiPlugin(env: Record<string, string>): Plugin {
         }
 
         try {
-          const searchQuery = `${songTitle} ${songDifficulty || ''} chart view`.trim();
+
+          const difficulty = songDifficulty || '';
+          const includeStaLight = ['Future', 'Beyond', 'Eternal'].includes(difficulty);
+          const searchQuery = `${includeStaLight ? 'StaLight ' : ''}Arcaea ${songTitle} ${difficulty} chart view`.trim();
+
           const response = await fetch(
             `https://www.googleapis.com/youtube/v3/search?` +
             new URLSearchParams({
