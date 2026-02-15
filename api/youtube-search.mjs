@@ -83,7 +83,6 @@ export default async function handler(req, res) {
   const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
   
   if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'your_youtube_api_key_here') {
-
     res.status(200).json(getMockData(songTitle));
     return;
   }
@@ -93,15 +92,13 @@ export default async function handler(req, res) {
     const difficulty = songDifficulty || '';
     const searchQuery = getSearchQuery(songTitle, difficulty);
 
-
-    
     const response = await fetch(
       `https://www.googleapis.com/youtube/v3/search?` +
       new URLSearchParams({
         part: 'snippet',
         q: searchQuery,
         type: 'video',
-        maxResults: '20',
+        maxResults: '25',
         key: YOUTUBE_API_KEY,
         order: 'relevance'
       }), {
@@ -116,11 +113,9 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-
       
       const isQuotaExceeded = errorData.error?.errors?.some(e => e.reason === 'quotaExceeded');
       if (isQuotaExceeded) {
-
         res.status(200).json(getMockData(songTitle));
         return;
       }
@@ -173,8 +168,7 @@ export default async function handler(req, res) {
     }
 
     res.status(200).json(videos);
-  } catch (error) {
-
+  } catch {
     res.status(500).json({ error: 'Failed to search YouTube videos' });
   }
 } 

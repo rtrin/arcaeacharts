@@ -76,7 +76,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
               }]));
               return;
             }
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -134,7 +134,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
               part: 'snippet',
               q: searchQuery,
               type: 'video',
-              maxResults: '20',
+              maxResults: '25',
               key: YOUTUBE_API_KEY,
               order: 'relevance'
             }), {
@@ -166,21 +166,10 @@ function apiPlugin(env: Record<string, string>): Plugin {
           let items = data.items || [];
           
           if (items.length > 0) {
-
-            
-            // Use shared utility for filtering and sorting
-            // Note: processYouTubeItems expects items, songTitle, difficulty
-            // And returns processed list of items.
-            // processYouTubeItems is already imported above
             items = processYouTubeItems(items, songTitle, difficulty);
-            
-            if (items.length === 0) {
-
-            }
           }
 
           if (items.length === 0) {
-
             res.statusCode = 200;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify([]));
@@ -213,8 +202,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(videos));
-        } catch (error) {
-
+        } catch {
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ error: 'Failed to search YouTube videos' }));

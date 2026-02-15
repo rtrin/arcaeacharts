@@ -23,12 +23,9 @@ export function normalizeSongTitle(songTitle) {
       title = title.replace(/ ͟͝͞Ⅱ́̕/g, 'II');
   }
 
-  // 3. Subtitle stripping (The Hyphen Rule)
-  // Matches " -Something-" at the end of the string
-  // Examples: "qualia -ideaesthesia-" -> "qualia"
-  //           "DA'AT -The First Seeker of Souls-" -> "DA'AT"
-  //           "Ävril -Flicka i krans-" -> "Ävril"
-  title = title.replace(/ -.+?-\s*$/, '');
+  // 3. Subtitle stripping (The Hyphen Rule) - REMOVED
+  // Rely on fuzzy matching instead to handle subtitles like "-ideaesthesia-"
+  // title = title.replace(/ -.+?-\s*$/, '');
   
   return title.trim();
 }
@@ -119,8 +116,6 @@ export function processYouTubeItems(items, songTitle, difficulty) {
   // Prepare the search term: normalized and lowercased
   const normalizedSongTitle = normalizeSongTitle(songTitle).toLowerCase();
   
-
-  
   const specializedTerms = ['Future', 'Beyond', 'Eternal', 'Past', 'Present'];
   const normalizedDifficulty = difficulty ? difficulty.toLowerCase() : '';
 
@@ -164,20 +159,10 @@ export function processYouTubeItems(items, songTitle, difficulty) {
          score += 5;
          reasons.push('+5 Difficulty Match');
        } else {
-         // If difficulty is specified but NOT found, check if it's a conflict
-         const hasConflictingDifficulty = specializedTerms.some(term => {
-            const termLower = term.toLowerCase();
-            if (termLower === normalizedDifficulty) return false;
-            const conflictingAliases = difficultyMap[termLower] || [termLower];
-            return conflictingAliases.some(alias => title.includes(alias));
-         });
-
-         if (hasConflictingDifficulty) {
-           score -= 100; // Heavily penalize wrong difficulty
-           reasons.push('-100 Conflicting Difficulty');
-         } else {
-           reasons.push('No Difficulty Match');
-         }
+         // Conflict Penalty REMOVED
+         // We simply don't add points if the difficulty doesn't match.
+         // Fuzzy match + Chart View preference should still bubble the right video to the top.
+         reasons.push('No Difficulty Match');
        }
     }
     
@@ -186,7 +171,6 @@ export function processYouTubeItems(items, songTitle, difficulty) {
        score += 2;
        reasons.push('+2 Chart View');
     }
-
 
     return { item, score };
   });
@@ -211,7 +195,7 @@ export function getSearchQuery(songTitle, difficulty) {
   // 4. Construct Query
   // Always prefix with "Arcaea"
   if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
-    return `Stalight Arcaea ${queryTitle} ${difficulty} chart view`;
+    return `Arcaea ${queryTitle} ${difficulty} chart view`;
   } else if (['Past', 'Present'].includes(difficulty)) {
      // Past/Present often have fewer "chart view" videos, exact match is often better
     return `Arcaea ${queryTitle} ${difficulty}`;
