@@ -24,7 +24,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
       server.middlewares.use('/api/youtube-search', async (req, res) => {
         // Initialize Supabase 
         const supabaseUrl = env.VITE_SUPABASE_URL;
-        const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+        const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
         const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
         // Enable CORS
