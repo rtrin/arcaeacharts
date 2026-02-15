@@ -6,6 +6,9 @@
 
 ```markdown
 ### Media Integration
+- [x] **Add fixed rating calculations** ✅
+  - Shows required score for 9.8, 9.9, and PM (10.0) on each song card when constant is set
+
 - [ ] **YouTube chart view videos** - Show top 3 chart views on each song card
   - Search for "{title} chart view" videos using YouTube API
   - Button called "Chart View" that full screens a YT video and locks the screen with an overlay
@@ -27,14 +30,9 @@
   - Support common video formats (mp4, webm, etc.)
   - Priority: MEDIUM
 
-- [ ] **Potential Calculation** - Calculate Arcaea player potential ratings
-  - Research exact formula for potential calculation (score vs chart constant)
-  - https://arcaea.fandom.com/wiki/Potential#Score_Modifier
-  - Example: 9960000/10000000 score on 10.7 constant chart = 12.5 potential
-  - Add calculator UI with input fields for score and chart constant
-  - Integrate into song cards or create separate calculator page
-  - Help players track their rating progress and set score goals
-  - Priority: HIGH
+- ✅ **Potential Calculation** - Calculate Arcaea player potential ratings (**COMPLETED**)
+  - ✅ Implemented exact formula for potential calculation (score vs chart constant)
+  - ✅ Reference: https://arcaea.fandom.com/wiki/Potential#Score_Modifier
 
 ```
 
@@ -199,7 +197,7 @@
 
 ## ✅ **Recently Completed Features:**
 
-### Chart View Video Overlay (Today's Work)
+### Chart View Video Overlay (Previous Work)
 - ✅ **Gesture Prevention System** - Blocks mobile taps/gestures on video area while keeping buttons functional
 - ✅ **YouTube Player API Integration** - PostMessage communication for play/pause/seek/speed without iframe reloads
 - ✅ **Dynamic Speed-Based Controls** - Rewind/forward time scales with playback speed (0.5x = 5s, 2x = 20s jumps)

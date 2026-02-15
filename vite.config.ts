@@ -124,10 +124,18 @@ function apiPlugin(env: Record<string, string>): Plugin {
         }
 
         try {
-
           const difficulty = songDifficulty || '';
-          const includeStaLight = ['Future', 'Beyond', 'Eternal'].includes(difficulty);
-          const searchQuery = `${includeStaLight ? 'StaLight ' : ''}Arcaea ${songTitle} ${difficulty} chart view`.trim();
+          let searchQuery;
+
+          if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
+            searchQuery = `StaLight Arcaea ${songTitle} ${difficulty} chart view`;
+          } else if (['Past', 'Present'].includes(difficulty)) {
+            searchQuery = `Arcaea ${songTitle} ${difficulty}`;
+          } else {
+            searchQuery = `Arcaea ${songTitle} chart view`;
+          }
+
+
 
           const response = await fetch(
             `https://www.googleapis.com/youtube/v3/search?` +
@@ -135,7 +143,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
               part: 'snippet',
               q: searchQuery,
               type: 'video',
-              maxResults: '3',
+              maxResults: '8',
               key: YOUTUBE_API_KEY,
               order: 'relevance'
             }), {
@@ -163,7 +171,24 @@ function apiPlugin(env: Record<string, string>): Plugin {
             throw new Error(`YouTube API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
           }
 
+
           const data = await response.json() as YouTubeAPIResponse;
+
+          // Filter for specific difficulty if needed
+          if (['Past', 'Present'].includes(difficulty)) {
+            const items = data.items || [];
+            
+            const matchIndex = items.findIndex(item => {
+              const title = item.snippet.title.toLowerCase();
+              const diff = difficulty.toLowerCase();
+              return title.includes(diff);
+            });
+
+            if (matchIndex > 0) {
+              const match = items.splice(matchIndex, 1)[0];
+              items.unshift(match);
+            }
+          }
           
           const videos = data.items.map((item) => ({
             id: item.id.videoId,

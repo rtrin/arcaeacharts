@@ -92,10 +92,16 @@ export default async function handler(req, res) {
 
 
   try {
-
     const difficulty = songDifficulty || '';
-    const includeStaLight = ['Future', 'Beyond', 'Eternal'].includes(difficulty);
-    const searchQuery = `${includeStaLight ? 'StaLight ' : ''}Arcaea ${songTitle} ${difficulty} chart view`.trim();
+    let searchQuery;
+
+    if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
+      searchQuery = `StaLight Arcaea ${songTitle} ${difficulty} chart view`;
+    } else if (['Past', 'Present'].includes(difficulty)) {
+      searchQuery = `Arcaea ${songTitle} ${difficulty}`;
+    } else {
+      searchQuery = `Arcaea ${songTitle} chart view`;
+    }
     
     const response = await fetch(
       `https://www.googleapis.com/youtube/v3/search?` +
@@ -134,7 +140,25 @@ export default async function handler(req, res) {
       throw new Error(`YouTube API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
+
     const data = await response.json();
+
+    // Filter for specific difficulty if needed
+    if (['Past', 'Present'].includes(difficulty)) {
+      const items = data.items || [];
+      // Find index of first item containing the difficulty string
+      const matchIndex = items.findIndex(item => {
+        const title = item.snippet.title.toLowerCase();
+        const diff = difficulty.toLowerCase();
+        return title.includes(diff);
+      });
+
+      // If found and not already at the top, move it to the top
+      if (matchIndex > 0) {
+        const match = items.splice(matchIndex, 1)[0];
+        items.unshift(match);
+      }
+    }
     
     // Check if items exist in the response
     if (!data.items) {
