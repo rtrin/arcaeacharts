@@ -1,85 +1,47 @@
-import { useEffect, useMemo, useState } from "react";
+// unused imports removed
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getSongs, getSongsPaginated, getCachedSummaries, saveSummariesToCache, type Song } from "@/lib/supabase";
-import { searchChartViewVideos, type YouTubeVideo } from "@/lib/youtube";
+// unused imports removed
 import { VideoOverlay } from "@/components/VideoOverlay";
 
+import { useSongs } from "@/hooks/useSongs";
+import { useSongFilter } from "@/hooks/useSongFilter";
+import { useVideoSelection } from "@/hooks/useVideoSelection";
+import { usePageMetadata } from "@/hooks/usePageMetadata";
+import {
+  calculatePlayRating,
+  getDifficultyColor,
+  difficultyTypes
+} from "@/lib/song-utils";
+
 const Index = () => {
-  const [query, setQuery] = useState("");
-  const [difficultyRange, setDifficultyRange] = useState<[number, number]>([
-    1, 12,
-  ]);
-  const [debouncedDifficultyRange, setDebouncedDifficultyRange] = useState<
-    [number, number]
-  >([1, 12]);
-  const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>(
-    []
-  );
-  const [allSongs, setAllSongs] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [sortBy, setSortBy] = useState<"title" | "artist" | "constant">(
-    "constant"
-  );
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
-  const [videoCache, setVideoCache] = useState<Map<string, YouTubeVideo[]>>(
-    new Map()
-  );
+  const { allSongs, loading, error } = useSongs();
 
-  // Which fields the text search applies to
-  const [searchFields, setSearchFields] = useState<Array<"title" | "artist" | "constant" | "version">>([
-    "title",
-    "artist",
-    "constant",
-    "version",
-  ]);
-  const difficultyTypes = ["Past", "Present", "Future", "Eternal", "Beyond"];
+  const {
+    query, setQuery,
+    difficultyRange, setDifficultyRange,
+    selectedDifficulties, setSelectedDifficulties,
+    searchFields, setSearchFields,
+    sortBy, setSortBy,
+    sortOrder, setSortOrder,
+    currentPage, setCurrentPage,
+    pageSize, setPageSize,
+    filteredSongs,
+    paginatedSongs,
+    totalPages,
+  } = useSongFilter(allSongs);
 
+  const pageSizeOptions = [10, 25, 50, 100];
 
+  const {
+    selectedVideo,
+    setSelectedVideo,
+    handleChartView
+  } = useVideoSelection();
 
-
-
-  // Score modifier: ≥10M -> 2.0; 9.8M–9.999M -> 1 + (score-9800000)/200000; ≤9.8M -> (score-9500000)/300000
-  const calculateScoreModifier = (score: number): number => {
-    if (score >= 10000000) return 2.0;
-    if (score >= 9800000) return 1.0 + (score - 9800000) / 200000;
-    return (score - 9500000) / 300000;
-  };
-
-  // Play rating = max(constant + score modifier, 0)
-  const calculatePlayRating = (constant: number, score: number): number => {
-    const modifier = calculateScoreModifier(score);
-    return Math.max(constant + modifier, 0);
-  };
-
-
-
-
-
-
-
-  const getDifficultyColor = (difficulty: string): string => {
-    switch (difficulty) {
-      case "Past":
-        return "#4caed1";
-      case "Present":
-        return "#8fad4c";
-      case "Future":
-        return "#822c68";
-      case "Eternal":
-        return "#8571a3";
-      case "Beyond":
-        return "#b5112e";
-      default:
-        return "#64748b";
-    }
-  };
+  const { jsonLd } = usePageMetadata(filteredSongs);
 
   const toggleDifficulty = (difficulty: string) => {
     setSelectedDifficulties(
@@ -92,208 +54,7 @@ const Index = () => {
     );
   };
 
-  const handleChartView = async (songTitle: string, songDifficulty: string) => {
-    let videos = videoCache.get(songTitle);
 
-    if (!videos) {
-      videos = await searchChartViewVideos(songTitle, songDifficulty);
-      setVideoCache((prev) => new Map(prev).set(songTitle, videos || []));
-    }
-
-    if (videos && videos.length > 0) {
-      // Use the first (most relevant) video
-      setSelectedVideo(videos[0].id);
-    }
-  };
-
-  useEffect(() => {
-    // SEO metadata
-    document.title = "Arcaea Charts";
-    const desc =
-      "Browse Arcaea songs by titles, artists, and difficulty levels.";
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) metaDesc.setAttribute("content", desc);
-    const canonical = document.querySelector('link[rel="canonical"]');
-    if (!canonical) {
-      const link = document.createElement("link");
-      link.setAttribute("rel", "canonical");
-      link.setAttribute("href", "/");
-      document.head.appendChild(link);
-    }
-
-    const loadSongs = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // 1. Try to load from cache first (instant display)
-        const cachedSummaries = getCachedSummaries();
-        if (cachedSummaries) {
-          // Convert summaries to full Song objects (includes cached imageUrl)
-          const cachedSongs: Song[] = cachedSummaries.map(s => ({
-            ...s,
-          }));
-          setAllSongs(cachedSongs);
-          setLoading(false); // Show cached data immediately
-        }
-
-        // 2. Fetch first page from server (with full data, ordered by constant DESC)
-        const { data: firstPage } = await getSongsPaginated(1, 25);
-
-        // Update with real data (includes imageUrl)
-        setAllSongs(firstPage);
-        setLoading(false);
-
-        // 3. Background: Fetch all songs and update cache
-        // This runs in the background without blocking the UI
-        getSongs()
-          .then(allSongs => {
-            // Convert to summaries (includes imageUrl for instant display)
-            const summaries = allSongs.map((song) => ({
-              id: song.id,
-
-              title: song.title,
-              artist: song.artist,
-              difficulty: song.difficulty,
-              constant: song.constant,
-              level: song.level,
-              version: song.version,
-            }));
-            saveSummariesToCache(summaries);
-            // Optionally update allSongs with full dataset for filtering/searching
-            setAllSongs(allSongs);
-          })
-          .catch(err => {
-            console.error('Background cache update failed:', err);
-            // Non-critical, don't show error to user
-          });
-
-      } catch (err) {
-        console.error("Error loading songs:", err);
-        setError("Failed to load songs. Please try again later.");
-        setLoading(false);
-      }
-    };
-
-    loadSongs();
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedDifficultyRange(difficultyRange);
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [difficultyRange]);
-
-  const processedSongs = useMemo(() => {
-    return allSongs.map((song) => ({
-      ...song,
-      searchText:
-        `${song.title} ${song.artist} ${song.constant} ${song.level}`.toLowerCase(),
-    }));
-  }, [allSongs]);
-
-  const filtered: Song[] = useMemo(() => {
-    const [min, max] = debouncedDifficultyRange;
-    const q = query.toLowerCase().trim();
-
-    return processedSongs.filter((s) => {
-      // Field-scoped text matching
-      const fieldMatch = !q || (() => {
-        const checks: boolean[] = [];
-        if (searchFields.includes("title")) {
-          checks.push(s.title.toLowerCase().includes(q));
-        }
-        if (searchFields.includes("artist")) {
-          checks.push(s.artist.toLowerCase().includes(q));
-        }
-        if (searchFields.includes("version")) {
-          const v = (s.version || "").toLowerCase();
-          checks.push(v.startsWith(q) || v.includes(q));
-        }
-        if (searchFields.includes("constant")) {
-          const cStr = String(s.constant).toLowerCase();
-          checks.push(cStr.startsWith(q) || cStr.includes(q));
-        }
-        return checks.some(Boolean);
-      })();
-      const inRange = s.constant === null || (s.constant >= min && s.constant <= max);
-      const difficultyMatch =
-        selectedDifficulties.length === 0 ||
-        selectedDifficulties.includes(s.difficulty);
-      return fieldMatch && inRange && difficultyMatch;
-    });
-  }, [query, debouncedDifficultyRange, selectedDifficulties, processedSongs, searchFields]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [query, debouncedDifficultyRange, selectedDifficulties]);
-
-  // Sort filtered songs
-  const sortedSongs = useMemo(() => {
-    const sorted = [...filtered].sort((a, b) => {
-      let aValue: string | number | null;
-      let bValue: string | number | null;
-
-      switch (sortBy) {
-        case "constant":
-          aValue = a.constant;
-          bValue = b.constant;
-          break;
-        case "title":
-          aValue = a[sortBy].toLowerCase();
-          bValue = b[sortBy].toLowerCase();
-          break;
-        case "artist":
-        default:
-          aValue = a[sortBy].toLowerCase();
-          bValue = b[sortBy].toLowerCase();
-          break;
-      }
-
-      if (sortOrder === "asc") {
-        if (aValue === null) return 1;
-        if (bValue === null) return -1;
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-      } else {
-        if (aValue === null) return 1;
-        if (bValue === null) return -1;
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-      }
-    });
-    return sorted;
-  }, [filtered, sortBy, sortOrder]);
-
-  const paginatedSongs = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return sortedSongs.slice(startIndex, endIndex);
-  }, [sortedSongs, currentPage, pageSize]);
-
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const pageSizeOptions = [10, 25, 50, 100];
-
-  const jsonLd = useMemo(
-    () => ({
-      "@context": "https://schema.org",
-      "@type": "ItemList",
-      name: "Arcaea Song Chart Index",
-      itemListElement: filtered.slice(0, 20).map((s, idx) => ({
-        "@type": "ListItem",
-        position: idx + 1,
-        item: {
-          "@type": "MusicRecording",
-          name: s.title,
-          byArtist: { "@type": "MusicGroup", name: s.artist },
-
-          genre: "Rhythm Game",
-          keywords: `difficulty ${s.difficulty}, constant ${s.constant}, level ${s.level}, version ${s.version}`,
-        },
-      })),
-    }),
-    [filtered]
-  );
 
   return (
     <div className="flex flex-col min-h-screen items-center">
@@ -322,7 +83,7 @@ const Index = () => {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by title, artist, or constant"
+                placeholder="Search by title, artist, constant, or version"
                 aria-label="Search songs"
               />
             </div>
@@ -584,7 +345,7 @@ const Index = () => {
                   </li>
                 ))}
 
-                {filtered.length === 0 && (
+                {filteredSongs.length === 0 && (
                   <div className="text-center py-16 text-muted-foreground">
                     No songs match your search.
                   </div>
@@ -592,16 +353,16 @@ const Index = () => {
               </ul>
 
               {/* Pagination Controls */}
-              {filtered.length > 0 && (
+              {filteredSongs.length > 0 && (
                 <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
                   {/* Results info */}
                   <div className="text-sm text-muted-foreground">
                     {Math.min(
                       (currentPage - 1) * pageSize + 1,
-                      filtered.length
+                      filteredSongs.length
                     )}
-                    -{Math.min(currentPage * pageSize, filtered.length)} of{" "}
-                    {filtered.length} songs
+                    -{Math.min(currentPage * pageSize, filteredSongs.length)} of{" "}
+                    {filteredSongs.length} songs
                   </div>
 
                   {/* Page size selector */}

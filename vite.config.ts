@@ -65,7 +65,6 @@ function apiPlugin(env: Record<string, string>): Plugin {
 
             const { data, error } = await query.single();
             if (data && !error) {
-              console.log(`[Dev] Cache hit for "${songTitle}"`);
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify([{
@@ -78,7 +77,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
               return;
             }
           } catch (e) {
-            console.warn('[Dev] Cache lookup failed', e);
+            // ignore
           }
         }
 
@@ -116,7 +115,6 @@ function apiPlugin(env: Record<string, string>): Plugin {
         const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
         
         if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'your_youtube_api_key_here') {
-          console.warn('YouTube API key not configured, returning mock data');
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(getMockData(songTitle)));
@@ -125,17 +123,10 @@ function apiPlugin(env: Record<string, string>): Plugin {
 
         try {
           const difficulty = songDifficulty || '';
-          let searchQuery;
-
-          if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
-            searchQuery = `StaLight Arcaea ${songTitle} ${difficulty} chart view`;
-          } else if (['Past', 'Present'].includes(difficulty)) {
-            searchQuery = `Arcaea ${songTitle} ${difficulty}`;
-          } else {
-            searchQuery = `Arcaea ${songTitle} chart view`;
-          }
-
-
+          
+          // @ts-ignore
+          const { getSearchQuery, processYouTubeItems } = await import('./api/video-utils.mjs');
+          const searchQuery = getSearchQuery(songTitle, difficulty);
 
           const response = await fetch(
             `https://www.googleapis.com/youtube/v3/search?` +
@@ -143,7 +134,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
               part: 'snippet',
               q: searchQuery,
               type: 'video',
-              maxResults: '8',
+              maxResults: '20',
               key: YOUTUBE_API_KEY,
               order: 'relevance'
             }), {
@@ -156,12 +147,10 @@ function apiPlugin(env: Record<string, string>): Plugin {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({})) as any;
-            console.error('YouTube API Error Details:', JSON.stringify(errorData, null, 2));
 
             // Check for quota exceeded error
             const isQuotaExceeded = errorData.error?.errors?.some((e: any) => e.reason === 'quotaExceeded');
             if (isQuotaExceeded) {
-              console.warn('YouTube API quota exceeded, falling back to mock data');
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify(getMockData(songTitle)));
@@ -174,23 +163,31 @@ function apiPlugin(env: Record<string, string>): Plugin {
 
           const data = await response.json() as YouTubeAPIResponse;
 
-          // Filter for specific difficulty if needed
-          if (['Past', 'Present'].includes(difficulty)) {
-            const items = data.items || [];
-            
-            const matchIndex = items.findIndex(item => {
-              const title = item.snippet.title.toLowerCase();
-              const diff = difficulty.toLowerCase();
-              return title.includes(diff);
-            });
+          let items = data.items || [];
+          
+          if (items.length > 0) {
 
-            if (matchIndex > 0) {
-              const match = items.splice(matchIndex, 1)[0];
-              items.unshift(match);
+            
+            // Use shared utility for filtering and sorting
+            // Note: processYouTubeItems expects items, songTitle, difficulty
+            // And returns processed list of items.
+            // processYouTubeItems is already imported above
+            items = processYouTubeItems(items, songTitle, difficulty);
+            
+            if (items.length === 0) {
+
             }
           }
+
+          if (items.length === 0) {
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify([]));
+            return;
+          }
           
-          const videos = data.items.map((item) => ({
+          const videos = items.map((item) => ({
             id: item.id.videoId,
             title: item.snippet.title,
             channelTitle: item.snippet.channelTitle,
@@ -208,9 +205,8 @@ function apiPlugin(env: Record<string, string>): Plugin {
                 video_id: topVideo.id,
                 video_title: topVideo.title,
                 channel_title: topVideo.channelTitle
-             }).then(({ error }) => {
-                if (error) console.error('[Dev] Failed to cache:', error);
-                else console.log(`[Dev] Cached "${songTitle}"`);
+             }).then(() => {
+                // ignore
              });
           }
 
@@ -218,7 +214,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(videos));
         } catch (error) {
-          console.error('Error searching YouTube videos:', error);
+
           res.statusCode = 500;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ error: 'Failed to search YouTube videos' }));

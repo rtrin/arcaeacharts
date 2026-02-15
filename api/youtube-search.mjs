@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+// verifying file content
+import { processYouTubeItems, getSearchQuery } from './video-utils.mjs';
 
 const getMockData = (songTitle) => [
   {
@@ -66,7 +67,6 @@ export default async function handler(req, res) {
       const { data, error } = await query.single();
       
       if (data && !error) {
-        console.log(`Cache hit for "${songTitle}"`);
         // Return cached data formatted as YouTubeVideo
         return res.status(200).json([{
           id: data.video_id,
@@ -76,16 +76,14 @@ export default async function handler(req, res) {
         }]);
       }
     } catch (err) {
-      console.warn('Cache lookup failed:', err);
+      // failed
     }
   }
 
   const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
   
   if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'your_youtube_api_key_here') {
-    console.warn('YouTube API key not configured');
-    // Return mock data for development
-    // Return mock data for development
+
     res.status(200).json(getMockData(songTitle));
     return;
   }
@@ -93,15 +91,9 @@ export default async function handler(req, res) {
 
   try {
     const difficulty = songDifficulty || '';
-    let searchQuery;
+    const searchQuery = getSearchQuery(songTitle, difficulty);
 
-    if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
-      searchQuery = `StaLight Arcaea ${songTitle} ${difficulty} chart view`;
-    } else if (['Past', 'Present'].includes(difficulty)) {
-      searchQuery = `Arcaea ${songTitle} ${difficulty}`;
-    } else {
-      searchQuery = `Arcaea ${songTitle} chart view`;
-    }
+
     
     const response = await fetch(
       `https://www.googleapis.com/youtube/v3/search?` +
@@ -109,14 +101,11 @@ export default async function handler(req, res) {
         part: 'snippet',
         q: searchQuery,
         type: 'video',
-        maxResults: '3',
+        maxResults: '20',
         key: YOUTUBE_API_KEY,
         order: 'relevance'
       }), {
         headers: {
-          // 1. Explicit APP_URL (if set)
-          // 2. Vercel automatically sets VERCEL_URL (add https://)
-          // 3. Fallback to request host
           'Referer': process.env.APP_URL || 
                      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) || 
                      req.headers.referer || 
@@ -127,12 +116,11 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('YouTube API Error Details:', JSON.stringify(errorData, null, 2));
+
       
-      // Check for quota exceeded error
       const isQuotaExceeded = errorData.error?.errors?.some(e => e.reason === 'quotaExceeded');
       if (isQuotaExceeded) {
-        console.warn('YouTube API quota exceeded, falling back to mock data');
+
         res.status(200).json(getMockData(songTitle));
         return;
       }
@@ -143,34 +131,20 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    // Filter for specific difficulty if needed
-    if (['Past', 'Present'].includes(difficulty)) {
-      const items = data.items || [];
-      // Find index of first item containing the difficulty string
-      const matchIndex = items.findIndex(item => {
-        const title = item.snippet.title.toLowerCase();
-        const diff = difficulty.toLowerCase();
-        return title.includes(diff);
-      });
+    let items = data.items || [];
 
-      // If found and not already at the top, move it to the top
-      if (matchIndex > 0) {
-        const match = items.splice(matchIndex, 1)[0];
-        items.unshift(match);
-      }
-    }
+    // Use shared utility for filtering and sorting
+    items = processYouTubeItems(items, songTitle, difficulty);
     
-    // Check if items exist in the response
-    if (!data.items) {
-       console.warn('No items found in YouTube response', data);
+    // Check if items exist (or were not filtered out)
+    if (items.length === 0) {
        return res.status(200).json([]);
     }
 
-    const videos = data.items.map((item) => ({
+    const videos = items.map((item) => ({
       id: item.id.videoId,
       title: item.snippet.title,
       channelTitle: item.snippet.channelTitle,
-
       videoUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`
     }));
 
@@ -189,18 +163,18 @@ export default async function handler(req, res) {
           });
           
         if (error) {
-          console.error('Failed to cache video:', error);
+          // failed to cache
         } else {
-           console.log(`Cached video for "${songTitle}"`);
+           // cached
         }
       } catch (err) {
-        console.error('Cache insert error:', err);
+        // ignore
       }
     }
 
     res.status(200).json(videos);
   } catch (error) {
-    console.error('Error searching YouTube videos:', error);
+
     res.status(500).json({ error: 'Failed to search YouTube videos' });
   }
 } 
