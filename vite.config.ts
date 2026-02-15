@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
+import { createClient } from '@supabase/supabase-js'
 import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import path from "path"
@@ -21,6 +22,11 @@ function apiPlugin(env: Record<string, string>): Plugin {
     name: 'api-plugin',
     configureServer(server) {
       server.middlewares.use('/api/youtube-search', async (req, res) => {
+        // Initialize Supabase 
+        const supabaseUrl = env.VITE_SUPABASE_URL;
+        const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_SERVICE_ROLE_KEY || env.VITE_SUPABASE_ANON_KEY;
+        const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
         // Enable CORS
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -43,6 +49,39 @@ function apiPlugin(env: Record<string, string>): Plugin {
         const songTitle = url.searchParams.get('songTitle');
         const songDifficulty = url.searchParams.get('songDifficulty');
 
+        // 1. Try Cache
+        if (supabase && songTitle) {
+          try {
+            let query = supabase
+              .from('song_videos')
+              .select('*')
+              .eq('song_title', songTitle);
+            
+            if (songDifficulty) {
+              query = query.eq('difficulty', songDifficulty);
+            } else {
+              query = query.is('difficulty', null);
+            }
+
+            const { data, error } = await query.single();
+            if (data && !error) {
+              console.log(`[Dev] Cache hit for "${songTitle}"`);
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify([{
+                id: data.video_id,
+                title: data.video_title,
+                channelTitle: data.channel_title,
+                thumbnailUrl: `https://img.youtube.com/vi/${data.video_id}/mqdefault.jpg`,
+                videoUrl: `https://www.youtube.com/watch?v=${data.video_id}`
+              }]));
+              return;
+            }
+          } catch (e) {
+            console.warn('[Dev] Cache lookup failed', e);
+          }
+        }
+
         if (!songTitle) {
           res.statusCode = 400;
           res.setHeader('Content-Type', 'application/json');
@@ -50,37 +89,37 @@ function apiPlugin(env: Record<string, string>): Plugin {
           return;
         }
 
+        const getMockData = (title: string) => [
+          {
+            id: 'mock1',
+            title: `${title} - Chart View`,
+            channelTitle: 'Chart Player',
+            thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+            videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+          },
+          {
+            id: 'mock2', 
+            title: `${title} - Full Combo`,
+            channelTitle: 'Pro Player',
+            thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+            videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+          },
+          {
+            id: 'mock3',
+            title: `${title} - Perfect Play`,
+            channelTitle: 'Master Player', 
+            thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+            videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
+          }
+        ];
+
         const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
         
         if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'your_youtube_api_key_here') {
           console.warn('YouTube API key not configured, returning mock data');
-          // Return mock data for development
-          const mockVideos = [
-            {
-              id: 'mock1',
-              title: `${songTitle} - Chart View`,
-              channelTitle: 'Chart Player',
-              thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-              videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-            },
-            {
-              id: 'mock2', 
-              title: `${songTitle} - Full Combo`,
-              channelTitle: 'Pro Player',
-              thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-              videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-            },
-            {
-              id: 'mock3',
-              title: `${songTitle} - Perfect Play`,
-              channelTitle: 'Master Player', 
-              thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-              videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-            }
-          ];
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(mockVideos));
+          res.end(JSON.stringify(getMockData(songTitle)));
           return;
         }
 
@@ -95,11 +134,29 @@ function apiPlugin(env: Record<string, string>): Plugin {
               maxResults: '3',
               key: YOUTUBE_API_KEY,
               order: 'relevance'
-            })
+            }), {
+              headers: {
+                // Use APP_URL env var if set, otherwise default to localhost
+                'Referer': env.APP_URL || 'http://localhost:5173'
+              }
+            }
           );
 
           if (!response.ok) {
-            throw new Error(`YouTube API request failed: ${response.status}`);
+            const errorData = await response.json().catch(() => ({})) as any;
+            console.error('YouTube API Error Details:', JSON.stringify(errorData, null, 2));
+
+            // Check for quota exceeded error
+            const isQuotaExceeded = errorData.error?.errors?.some((e: any) => e.reason === 'quotaExceeded');
+            if (isQuotaExceeded) {
+              console.warn('YouTube API quota exceeded, falling back to mock data');
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(getMockData(songTitle)));
+              return;
+            }
+
+            throw new Error(`YouTube API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
           }
 
           const data = await response.json() as YouTubeAPIResponse;
@@ -111,6 +168,22 @@ function apiPlugin(env: Record<string, string>): Plugin {
             thumbnailUrl: item.snippet.thumbnails.medium.url,
             videoUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`
           }));
+
+          // 2. Save to Cache
+          if (supabase && videos.length > 0) {
+             const topVideo = videos[0];
+             // Fire and forget insert
+             supabase.from('song_videos').insert({
+                song_title: songTitle,
+                difficulty: songDifficulty || null,
+                video_id: topVideo.id,
+                video_title: topVideo.title,
+                channel_title: topVideo.channelTitle
+             }).then(({ error }) => {
+                if (error) console.error('[Dev] Failed to cache:', error);
+                else console.log(`[Dev] Cached "${songTitle}"`);
+             });
+          }
 
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
