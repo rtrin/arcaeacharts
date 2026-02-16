@@ -125,7 +125,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
           const difficulty = songDifficulty || '';
           
           // @ts-ignore
-          const { getSearchQuery, processYouTubeItems } = await import('./api/video-utils.mjs');
+          const { getSearchQuery, processYouTubeItems } = await import('./api/_video-utils.mjs');
           const searchQuery = getSearchQuery(songTitle, difficulty);
 
           const response = await fetch(

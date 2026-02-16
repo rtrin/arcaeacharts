@@ -1,5 +1,5 @@
 // verifying file content
-import { processYouTubeItems, getSearchQuery } from './video-utils.mjs';
+import { processYouTubeItems, getSearchQuery } from './_video-utils.mjs';
 
 const getMockData = (songTitle) => [
   {
