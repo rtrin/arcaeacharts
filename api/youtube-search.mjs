@@ -1,6 +1,5 @@
-import { processYouTubeItems, getSearchQuery } from './video-utils';
+import { processYouTubeItems, getSearchQuery } from './video-utils.mjs';
 import { createClient } from '@supabase/supabase-js';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Initialize Supabase client
 // Prefer Service Role Key for backend (allows INSERT), fallback to Anon Key (read-only usually)
@@ -8,7 +7,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -94,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       
-      const isQuotaExceeded = errorData.error?.errors?.some((e: any) => e.reason === 'quotaExceeded');
+      const isQuotaExceeded = errorData.error?.errors?.some(e => e.reason === 'quotaExceeded');
       if (isQuotaExceeded) {
         // Mock data removed
         res.status(200).json([]);
@@ -104,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error(`YouTube API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
     }
 
-    const data: any = await response.json();
+    const data = await response.json();
 
     let items = data.items || [];
 
@@ -116,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
        return res.status(200).json([]);
     }
 
-    const videos = items.map((item: any) => ({
+    const videos = items.map(item => ({
       id: item.id.videoId,
       title: item.snippet.title,
       channelTitle: item.snippet.channelTitle,
@@ -151,4 +150,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     res.status(500).json({ error: 'Failed to search YouTube videos' });
   }
-} 
+}
