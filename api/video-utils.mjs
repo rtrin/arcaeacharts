@@ -21,9 +21,13 @@ export function normalizeSongTitle(songTitle) {
       title = title.replace(/ ͟͝͞Ⅱ́̕/g, 'II');
   }
 
-  // 3. Subtitle stripping (The Hyphen Rule) - REMOVED
-  // Rely on fuzzy matching instead to handle subtitles like "-ideaesthesia-"
-  // title = title.replace(/ -.+?-\s*$/, '');
+  // 3. Subtitle stripping (The Hyphen Rule) - RESTORED
+  // Fixes matching for long titles like "Misdeed -la bonté de Dieu et l'origine du mal-"
+  // "Misdeed -la..." becomes "Misdeed"
+  if (title.includes(' -')) {
+      title = title.split(' -')[0];
+  }
+
   
   return title.trim();
 }
