@@ -88,36 +88,13 @@ function apiPlugin(env: Record<string, string>): Plugin {
           return;
         }
 
-        const getMockData = (title: string) => [
-          {
-            id: 'mock1',
-            title: `${title} - Chart View`,
-            channelTitle: 'Chart Player',
-            thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-            videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-          },
-          {
-            id: 'mock2', 
-            title: `${title} - Full Combo`,
-            channelTitle: 'Pro Player',
-            thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-            videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-          },
-          {
-            id: 'mock3',
-            title: `${title} - Perfect Play`,
-            channelTitle: 'Master Player', 
-            thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-            videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-          }
-        ];
-
         const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY;
         
         if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'your_youtube_api_key_here') {
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify(getMockData(songTitle)));
+          // Mock data removed
+          res.end(JSON.stringify([]));
           return;
         }
 
@@ -125,7 +102,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
           const difficulty = songDifficulty || '';
           
           // @ts-ignore
-          const { getSearchQuery, processYouTubeItems } = await import('./api/_video-utils.mjs');
+          const { getSearchQuery, processYouTubeItems } = await import('./api/video-utils.mjs');
           const searchQuery = getSearchQuery(songTitle, difficulty);
 
           const response = await fetch(
@@ -153,7 +130,8 @@ function apiPlugin(env: Record<string, string>): Plugin {
             if (isQuotaExceeded) {
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify(getMockData(songTitle)));
+              // Mock data removed
+              res.end(JSON.stringify([]));
               return;
             }
 

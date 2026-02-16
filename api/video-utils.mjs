@@ -1,9 +1,4 @@
-// verifying file content
-// Inlined video-utils to fix Vercel bundling
-import { createClient } from '@supabase/supabase-js';
-/* eslint-disable no-unused-vars */
-
-function normalizeCharacters(str) {
+export function normalizeCharacters(str) {
   if (!str) return '';
   return str
     // Normalize unicode characters to canonical decomposition
@@ -14,7 +9,7 @@ function normalizeCharacters(str) {
     .trim();
 }
 
-function normalizeSongTitle(songTitle) {
+export function normalizeSongTitle(songTitle) {
   let title = songTitle || '';
 
   // 1. Normalize characters first (handle smart quotes, etc)
@@ -64,7 +59,7 @@ function levenshteinDistance(a, b) {
   return matrix[b.length][a.length];
 }
 
-function fuzzyTitleMatch(videoTitle, songTitle) {
+export function fuzzyTitleMatch(videoTitle, songTitle) {
    // 1. Check strict inclusion first (fastest)
    if (videoTitle.includes(songTitle)) return true;
 
@@ -113,7 +108,7 @@ function fuzzyTitleMatch(videoTitle, songTitle) {
    return matchPercentage >= 0.8; 
 }
 
-function processYouTubeItems(items, songTitle, difficulty) {
+export function processYouTubeItems(items, songTitle, difficulty) {
   if (!items || items.length === 0) return [];
 
   // Prepare the search term: normalized and lowercased
@@ -192,7 +187,7 @@ function processYouTubeItems(items, songTitle, difficulty) {
   }
 }
 
-function getSearchQuery(songTitle, difficulty) {
+export function getSearchQuery(songTitle, difficulty) {
   const queryTitle = normalizeSongTitle(songTitle);
 
   // 4. Construct Query
@@ -207,175 +202,3 @@ function getSearchQuery(songTitle, difficulty) {
     return `Arcaea ${queryTitle} chart view`;
   }
 }
-
-const getMockData = (songTitle) => [
-  {
-    id: 'mock1',
-    title: `${songTitle} - Chart View`,
-    channelTitle: 'Chart Player',
-    videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-  },
-  {
-    id: 'mock2', 
-    title: `${songTitle} - Full Combo`,
-    channelTitle: 'Pro Player',
-    videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-  },
-  {
-    id: 'mock3',
-    title: `${songTitle} - Perfect Play`,
-    channelTitle: 'Master Player', 
-    videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-  }
-];
-
-// Initialize Supabase client
-// Prefer Service Role Key for backend (allows INSERT), fallback to Anon Key (read-only usually)
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
-  const { songTitle, songDifficulty } = req.query;
-
-  if (!songTitle || typeof songTitle !== 'string') {
-    res.status(400).json({ error: 'songTitle parameter is required' });
-    return;
-  }
-
-  // 1. Try to get from Cache (Supabase)
-  if (supabase) {
-    try {
-      let query = supabase
-        .from('song_videos')
-        .select('*')
-        .eq('song_title', songTitle);
-      
-      if (songDifficulty) {
-        query = query.eq('difficulty', songDifficulty);
-      } else {
-        query = query.is('difficulty', null);
-      }
-
-      const { data, error } = await query.single();
-      
-      if (data && !error) {
-        // Return cached data formatted as YouTubeVideo
-        return res.status(200).json([{
-          id: data.video_id,
-          title: data.video_title,
-          channelTitle: data.channel_title,
-          videoUrl: `https://www.youtube.com/watch?v=${data.video_id}`
-        }]);
-      }
-    } catch (err) {
-      // failed
-    }
-  }
-
-  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
-  
-  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'your_youtube_api_key_here') {
-    res.status(200).json(getMockData(songTitle));
-    return;
-  }
-
-
-  try {
-    const difficulty = songDifficulty || '';
-    const searchQuery = getSearchQuery(songTitle, difficulty);
-
-    const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?` +
-      new URLSearchParams({
-        part: 'snippet',
-        q: searchQuery,
-        type: 'video',
-        maxResults: '25',
-        key: YOUTUBE_API_KEY,
-        order: 'relevance'
-      }), {
-        headers: {
-          'Referer': process.env.APP_URL || 
-                     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) || 
-                     req.headers.referer || 
-                     `https://${req.headers.host}`
-        }
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      
-      const isQuotaExceeded = errorData.error?.errors?.some(e => e.reason === 'quotaExceeded');
-      if (isQuotaExceeded) {
-        res.status(200).json(getMockData(songTitle));
-        return;
-      }
-
-      throw new Error(`YouTube API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-    }
-
-
-    const data = await response.json();
-
-    let items = data.items || [];
-
-    // Use shared utility for filtering and sorting
-    items = processYouTubeItems(items, songTitle, difficulty);
-    
-    // Check if items exist (or were not filtered out)
-    if (items.length === 0) {
-       return res.status(200).json([]);
-    }
-
-    const videos = items.map((item) => ({
-      id: item.id.videoId,
-      title: item.snippet.title,
-      channelTitle: item.snippet.channelTitle,
-      videoUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`
-    }));
-
-    // 2. Save to Cache (Supabase)
-    if (supabase && videos.length > 0) {
-      const topVideo = videos[0];
-      try {
-        const { error } = await supabase
-          .from('song_videos')
-          .insert({
-            song_title: songTitle,
-            difficulty: songDifficulty || null,
-            video_id: topVideo.id,
-            video_title: topVideo.title,
-            channel_title: topVideo.channelTitle
-          });
-          
-        if (error) {
-          // failed to cache
-        } else {
-           // cached
-        }
-      } catch (err) {
-        // ignore
-      }
-    }
-
-    res.status(200).json(videos);
-  } catch {
-    res.status(500).json({ error: 'Failed to search YouTube videos' });
-  }
-} 
