@@ -1,5 +1,6 @@
 // verifying file content
 // Inlined video-utils to fix Vercel bundling
+import { createClient } from '@supabase/supabase-js';
 /* eslint-disable no-unused-vars */
 
 function normalizeCharacters(str) {
