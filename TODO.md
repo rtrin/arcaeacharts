@@ -6,6 +6,7 @@
 
 ```markdown
 ### Media Integration
+- Add charter info to song card
 - [x] **Add fixed rating calculations** ✅
   - Shows required score for 9.8, 9.9, and PM (10.0) on each song card when constant is set
 
@@ -101,7 +102,7 @@
 
 ### Visual Polish
 - [ ] **Improve difficulty button styling**
-  - Color-code by difficulty (Past=blue, Present=green, etc.)
+  - Color-code by difficulty (Future=purple, Eternal=lavender, Beyond=red)
   - Better hover states
   - Clear selection indicators
   - Priority: MEDIUM

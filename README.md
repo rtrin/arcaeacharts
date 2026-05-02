@@ -7,7 +7,7 @@ A basic web application for browsing and searching Arcaea charts.
 ### **Search & Filtering**
 - **Text Search**: Search by song title, artist, or chart constant
 - **Difficulty Range**:  Slider for filtering by chart constant (1.0 - 12.0+)
-- **Difficulty Types**: Filter by Past, Present, Future, Eternal, and Beyond difficulties
+- **Difficulty Types**: Filter by Future, Eternal, and Beyond difficulties
 
 ### **Chart View**
 - **YouTube Integration**: Each song card includes a "Chart View" button

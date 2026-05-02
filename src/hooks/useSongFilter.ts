@@ -8,8 +8,8 @@ export type SearchField = "title" | "artist" | "constant" | "version";
 
 export const useSongFilter = (allSongs: Song[]) => {
   const [query, setQuery] = useState("");
-  const [difficultyRange, setDifficultyRange] = useState<[number, number]>([1, 12]);
-  const [debouncedDifficultyRange, setDebouncedDifficultyRange] = useState<[number, number]>([1, 12]);
+  const [difficultyRange, setDifficultyRange] = useState<[number, number]>([7, 12]);
+  const [debouncedDifficultyRange, setDebouncedDifficultyRange] = useState<[number, number]>([7, 12]);
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([]);
   
   const [searchFields, setSearchFields] = useState<Array<SearchField>>([

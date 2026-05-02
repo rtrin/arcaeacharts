@@ -183,13 +183,9 @@ const Index = () => {
                       ? "ETR"
                       : difficulty === "Beyond"
                         ? "BYD"
-                        : difficulty === "Past"
-                          ? "PST"
-                          : difficulty === "Present"
-                            ? "PRS"
-                            : difficulty === "Future"
-                              ? "FTR"
-                              : difficulty.slice(0, 3).toUpperCase()}
+                        : difficulty === "Future"
+                          ? "FTR"
+                          : difficulty.slice(0, 3).toUpperCase()}
                   </Button>
                 ))}
               </div>
@@ -220,7 +216,7 @@ const Index = () => {
                 onValueChange={(val) =>
                   setDifficultyRange([val[0], val[1]] as [number, number])
                 }
-                min={1}
+                min={7}
                 max={12}
                 step={0.1}
                 aria-label="Difficulty range"

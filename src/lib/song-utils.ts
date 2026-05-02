@@ -11,16 +11,12 @@ export const calculatePlayRating = (constant: number, score: number): number => 
   return Math.max(constant + modifier, 0);
 };
 
-export const difficultyTypes = ["Past", "Present", "Future", "Eternal", "Beyond"];
+export const difficultyTypes = ["Future", "Eternal", "Beyond"];
 
 export const getDifficultyColor = (difficulty: string): string => {
   // Normalize checking? The UI usually passes capitalized, but good to be safe if needed.
   // Assuming strict matching based on current usage.
   switch (difficulty) {
-    case "Past":
-      return "#4caed1";
-    case "Present":
-      return "#8fad4c";
     case "Future":
       return "#822c68";
     case "Eternal":

@@ -118,7 +118,7 @@ export function processYouTubeItems(items, songTitle, difficulty) {
   // Prepare the search term: normalized and lowercased
   const normalizedSongTitle = normalizeSongTitle(songTitle).toLowerCase();
   
-  const specializedTerms = ['Future', 'Beyond', 'Eternal', 'Past', 'Present'];
+  const specializedTerms = ['Future', 'Beyond', 'Eternal'];
   const normalizedDifficulty = difficulty ? difficulty.toLowerCase() : '';
 
   // Score each item
@@ -148,8 +148,6 @@ export function processYouTubeItems(items, songTitle, difficulty) {
       'beyond': ['beyond', 'byd'],
       'future': ['future', 'ftr'],
       'eternal': ['eternal', 'etr'],
-      'present': ['present', 'prs'],
-      'past': ['past', 'pst']
     };
 
     if (normalizedDifficulty) {
@@ -198,11 +196,6 @@ export function getSearchQuery(songTitle, difficulty) {
   // Always prefix with "Arcaea"
   if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
     return `Arcaea ${queryTitle} ${difficulty} chart view`;
-  } else if (['Past', 'Present'].includes(difficulty)) {
-     // Past/Present often have fewer "chart view" videos, exact match is often better
-    return `Arcaea ${queryTitle} ${difficulty}`;
-  } else {
-     // Default fallback
-    return `Arcaea ${queryTitle} chart view`;
   }
+  return `Arcaea ${queryTitle} chart view`;
 }
