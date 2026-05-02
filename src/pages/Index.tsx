@@ -439,11 +439,12 @@ const Index = () => {
               />
             </a>
           </div>
+          <p className="text-xs opacity-75">If you find this useful, consider supporting us!</p>
+          <p className="text-xs opacity-75">
+            Tip: Use <strong>Guided Access</strong> to prevent accidental exits.
+          </p>
           <p className="text-xs opacity-75">
             Song data from Arcaea © lowiro · {new Date().getFullYear()}
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">
-            Tip: Use <strong>Guided Access</strong> to prevent accidental exits.
           </p>
         </div>
       </footer>
