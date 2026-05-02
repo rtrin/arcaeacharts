@@ -267,6 +267,9 @@ const Index = () => {
                               {song.difficulty}
                             </span>
                           </div>
+                          <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">
+                            Charter: N/A
+                          </div>
                         </div>
                       </div>
 
