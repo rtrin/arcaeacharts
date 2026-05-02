@@ -17,6 +17,7 @@ export interface Song {
   constant: number | null;
   level: string;
   version: string;
+  charter: string | null;
 }
 
 // Summary for caching (includes imageUrl for instant display)
@@ -29,6 +30,7 @@ export interface SongSummary {
   constant: number | null;
   level: string;
   version: string;
+  charter: string | null;
 }
 
 // Cache key and expiration (24 hours)
@@ -78,7 +80,7 @@ export const getAllSummaries = async (): Promise<SongSummary[]> => {
   while (true) {
     const { data, error } = await supabase
       .from("songs")
-      .select("id, title, artist, difficulty, constant, level, version")
+      .select("id, title, artist, difficulty, constant, level, version, charter")
       .range(from, from + pageSize - 1)
       .order("constant", { ascending: false });
 

@@ -268,7 +268,7 @@ const Index = () => {
                             </span>
                           </div>
                           <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">
-                            Charter: N/A
+                            Charter: {song.charter ?? "N/A"}
                           </div>
                         </div>
                       </div>

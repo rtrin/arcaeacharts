@@ -45,6 +45,7 @@ export const useSongs = () => {
               constant: song.constant,
               level: song.level,
               version: song.version,
+              charter: song.charter,
             }));
             saveSummariesToCache(summaries);
             // Update comprehensive list
