@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: PROD
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: data-pipeline
 
     steps:
       - name: Checkout
@@ -29,15 +32,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('data-pipeline/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      # - name: Lint
-      #   run: pylint scraper.py pipeline.py update_image_urls.py
 
       - name: Run pipeline
         env:

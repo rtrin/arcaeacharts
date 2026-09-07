@@ -34,7 +34,7 @@ A basic web application for browsing and searching Arcaea charts.
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/rtrinh760/arcaeacharts.git
+   git clone https://github.com/rtrin/arcaeacharts.git
    cd arcaeacharts
    ```
 
@@ -65,6 +65,18 @@ A basic web application for browsing and searching Arcaea charts.
    Navigate to `http://localhost:5173`
 
 For detailed Supabase setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP.md).
+
+## Data Pipeline
+
+The `data-pipeline/` directory scrapes Arcaea chart metadata and syncs it to Supabase:
+
+```bash
+cd data-pipeline
+pip install -r requirements.txt
+python pipeline.py
+```
+
+The GitHub Actions workflow runs the sync daily at 4:00 UTC or manually from the Actions tab. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the repository's `PROD` environment.
 
 ## Contributing
 
