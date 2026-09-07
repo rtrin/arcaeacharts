@@ -39,6 +39,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Run pipeline tests
+        run: python -m unittest discover -s tests
+
+      - name: Lint pipeline
+        run: pip install pylint && pylint scraper.py pipeline.py
+
       - name: Run pipeline
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

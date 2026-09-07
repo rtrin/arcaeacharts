@@ -44,18 +44,27 @@ The existing selected/unselected button styles will be reused unchanged:
 - Selected: `#030E46` background with white text.
 - Unselected: transparent background with `#030E46` border and text.
 
-### Data assumptions
+### Data and pipeline assumptions
 
-No database migration or data-pipeline change is planned. The existing
+No database column migration is needed. The existing
 `songs.difficulty` column and frontend `Song`/`SongSummary` types already use
 string values, so the frontend can filter `Inscribed` rows without a schema
 change. If the current Supabase dataset does not contain Inscribed rows, the
 new control will still render but will return no results until the data is
 available.
 
+The Miraheze detail-page parser must include `Inscribed` rows. It must use the
+visible chart difficulty label as authoritative before consulting CSS classes,
+because the wiki may temporarily render an `[Inscribed]` cell with a reused
+class such as `byd-txt`.
+
+When a song has both Beyond and Inscribed chart rows, Inscribed replaces Beyond
+in the published catalog. The pipeline removes the replaced Beyond row after a
+successful publish.
+
 ### Cache and API behavior
 
-No cache or API changes are planned. Inscribed rows returned by Supabase will
+No cache changes are planned. Inscribed rows returned by Supabase will
 flow through the existing local-storage summary cache and full-song fetch.
 Chart View already passes the stored difficulty string through to the search
 endpoint, so it will naturally receive `Inscribed` when used for an Inscribed
@@ -67,6 +76,8 @@ song.
 |------|--------|
 | `src/lib/song-utils.ts` | Add `Inscribed` to the difficulty list and color map. |
 | `src/pages/Index.tsx` | Render `INS` for the Inscribed filter button. |
+| `data-pipeline/scraper.py` | Extract Inscribed chart data from linked Miraheze song pages. |
+| `api/video-utils.mjs` | Include Inscribed terms in Chart View search relevance. |
 
 ## Interaction and Accessibility
 

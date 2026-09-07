@@ -92,9 +92,11 @@ The first release publishes Future, Eternal, Beyond, and Inscribed. Past and
 Present may be parsed for diagnostics but remain excluded from the `songs`
 table.
 
-The exact HTML class names for Inscribed level and constant must be confirmed
-against representative Miraheze song pages during implementation. Keep the
-difficulty class-key mapping in one configuration table rather than scattering
+Difficulty text rendered in the chart-information cells is authoritative. The
+parser must check the visible label, such as `[Inscribed]`, before consulting a
+CSS class. Miraheze may reuse an existing class such as `byd-txt` for a new
+difficulty, so CSS classes alone must not determine the stored difficulty.
+Keep class-key mappings as a fallback configuration rather than scattering
 `ins` assumptions through the parser.
 
 ## Pipeline Architecture
@@ -155,7 +157,8 @@ Normalization rules:
 - Convert chart constants to finite decimal numbers; reject placeholders,
   ranges, and non-numeric values rather than guessing.
 - Parse the leading numeric portion of levels (`9+` becomes `9`) using the
-  existing pipeline behavior.
+- preserve an explicit `+` level marker and derive one when the constant is in
+  the `.7` through `.9` range (`8.8 -> 8+`, `11.8 -> 11+`).
 - Use the canonical difficulty names above for all database rows.
 - Deduplicate by `(title, artist, difficulty)` before publish, with duplicate
   conflicting values treated as a validation error instead of silently choosing
@@ -169,6 +172,8 @@ Required row invariants:
 - constant is finite and within the existing accepted range (`<= 13`);
 - a chart row has a valid level and constant together;
 - difficulty values are never silently renamed or merged during normalization.
+- when a song has both Inscribed and Beyond rows, publish Inscribed and remove
+  the replaced Beyond row for that song.
 
 Charter enrichment remains best-effort. A missing charter does not fail the
 run, but charter fetch/parse errors must be counted and logged.
