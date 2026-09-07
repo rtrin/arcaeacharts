@@ -1,0 +1,1 @@
+ALTER TABLE songs ADD COLUMN IF NOT EXISTS charter text;

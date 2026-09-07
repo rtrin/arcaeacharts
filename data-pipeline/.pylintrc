@@ -1,0 +1,13 @@
+[MASTER]
+jobs=0
+
+[MESSAGES CONTROL]
+# C0116: all public functions have docstrings; disable to avoid false positives in IDE
+disable=missing-function-docstring
+
+[FORMAT]
+max-line-length=120
+
+[BASIC]
+# Allow short names in comprehensions and tight loops where we've renamed
+good-names=i,j,k,ex,Run,_

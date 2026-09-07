@@ -1,0 +1,12 @@
+# Secrets (never commit)
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Generated / large data (optional; remove if you want to commit)
+wiki_images/
+*.csv

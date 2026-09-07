@@ -1,0 +1,10 @@
+---
+description: Enforce pylint and project style when editing Python in this repo
+globs: ["**/*.py"]
+---
+
+# Lint and style (Python)
+
+- **Before finishing edits:** Run `pylint scraper.py pipeline.py update_image_urls.py` (or the files you changed). Fix any reported errors or warnings; do not leave pylint issues in the code.
+- **Config:** Linting uses the project’s [.pylintrc](.pylintrc) (e.g. `max-line-length=120`). Follow it.
+- **Conventions:** Use descriptive variable names (no single-letter names except in very short loops/comprehensions). Prefer specific exception types over bare `Exception` where possible. Add docstrings for public functions and modules. Prefer `snake_case` for functions and variables.
