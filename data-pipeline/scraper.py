@@ -6,6 +6,7 @@ import random
 import re
 import time
 from html import unescape
+from decimal import Decimal, InvalidOperation
 from urllib.parse import unquote, urljoin, urlparse
 
 import requests
@@ -30,6 +31,10 @@ DIFFICULTY_BY_CLASS = {
     "etr": "Eternal",
     "byd": "Beyond",
     "ins": "Inscribed",
+}
+DIFFICULTY_BY_LABEL = {
+    **{difficulty.casefold(): difficulty for difficulty in DIFFICULTY_BY_CLASS.values()},
+    **{key.upper(): value for key, value in DIFFICULTY_BY_CLASS.items()},
 }
 SUPPORTED_DIFFICULTIES = {"Future", "Eternal", "Beyond", "Inscribed"}
 KEPT_DIFFICULTIES = SUPPORTED_DIFFICULTIES
@@ -192,21 +197,49 @@ def _label_values(box, label_text):
     return []
 
 
-def _difficulty_from_cell(cell):
-    for class_name in cell.select_one("[class]").get("class", []) if cell.select_one("[class]") else []:
-        match = re.match(r"(.+)-txt$", class_name)
-        if match and match.group(1) in DIFFICULTY_BY_CLASS:
-            return DIFFICULTY_BY_CLASS[match.group(1)]
-    text = re.sub(r"[\[\]]", "", cell.get_text(" ", strip=True)).casefold()
-    for difficulty in DIFFICULTY_BY_CLASS.values():
-        if text == difficulty.casefold():
-            return difficulty
+def _visible_difficulty(cell):
+    text = cell.get_text(" ", strip=True)
+    text = re.sub(r"^\s*\[([^\[\]]+)\]\s*$", r"\1", text).strip()
+    return DIFFICULTY_BY_LABEL.get(text.casefold()) or DIFFICULTY_BY_LABEL.get(text.upper())
+
+
+def _class_difficulty(cell):
+    for node in [cell, *cell.select("[class]")]:
+        for class_name in node.get("class", []):
+            match = re.fullmatch(r"([a-z]+)-txt", class_name.casefold())
+            if match and match.group(1) in DIFFICULTY_BY_CLASS:
+                return DIFFICULTY_BY_CLASS[match.group(1)]
     return None
 
 
+def _difficulty_from_cell_details(cell):
+    visible = _visible_difficulty(cell)
+    class_difficulty = _class_difficulty(cell)
+    warning = None
+    if visible and class_difficulty and visible != class_difficulty:
+        warning = {
+            "type": "difficulty_label_class_mismatch",
+            "visible": visible,
+            "css_class": class_difficulty,
+        }
+    return visible or class_difficulty, warning
+
+
+def _difficulty_from_cell(cell):
+    """Return the visible difficulty, falling back to its CSS class."""
+    return _difficulty_from_cell_details(cell)[0]
+
+
 def _clean_constant(value):
-    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*", value or "")
-    return float(match.group(1)) if match else None
+    text = "" if value is None else str(value)
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*", text)
+    if not match:
+        return None
+    try:
+        constant = Decimal(match.group(1))
+    except InvalidOperation:
+        return None
+    return constant if constant.is_finite() and constant <= Decimal("13") else None
 
 
 def _clean_version(value):
@@ -214,38 +247,47 @@ def _clean_version(value):
     return match.group(1) if match else ""
 
 
-def _parse_chart_rows(box, title, artist, version):
+def _expand_chart_cells(cells):
+    """Expand cells with grid spans so chart columns align by difficulty."""
+    expanded = []
+    for cell in cells:
+        match = re.search(r"grid-column\s*:\s*span\s+(\d+)", cell.get("style", ""), re.IGNORECASE)
+        expanded.extend([cell] * int(match.group(1)) if match else [cell])
+    return expanded
+
+
+def _parse_chart_rows(box, title, artist, version):  # pylint: disable=too-many-locals
     """Parse chart columns from a song information box."""
-    difficulty_cells = _label_values(box, "Difficulty")
-    level_cells = _label_values(box, "Level")
-    constant_cells = _label_values(box, "Constant")
-    charter_cells = _label_values(box, "Chart designer")
+    difficulty_cells = _expand_chart_cells(_label_values(box, "Difficulty"))
+    level_cells = _expand_chart_cells(_label_values(box, "Level"))
+    constant_cells = _expand_chart_cells(_label_values(box, "Constant"))
+    charter_cells = _expand_chart_cells(_label_values(box, "Chart designer"))
 
     rows = []
     for index, cell in enumerate(difficulty_cells):
-        difficulty = _difficulty_from_cell(cell)
+        difficulty, difficulty_warning = _difficulty_from_cell_details(cell)
         if difficulty not in SUPPORTED_DIFFICULTIES:
             continue
-        if index >= len(level_cells) or index >= len(constant_cells):
-            continue
-        constant = _clean_constant(constant_cells[index].get_text(" ", strip=True))
-        level_match = re.match(r"\s*(\d+)", level_cells[index].get_text(" ", strip=True))
-        if constant is None or not level_match:
-            continue
+        level = level_cells[index].get_text(" ", strip=True) if index < len(level_cells) else ""
+        constant_text = constant_cells[index].get_text(" ", strip=True) if index < len(constant_cells) else ""
+        constant = _clean_constant(constant_text)
         charter = ""
         if index < len(charter_cells):
             charter = charter_cells[index].get_text(" ", strip=True)
-        rows.append(
-            {
-                "song": title.strip(),
-                "artist": artist,
-                "difficulty": difficulty,
-                "chart_constant": constant,
-                "level": level_match.group(1),
-                "version": version,
-                "charter": charter or None,
-            }
-        )
+        row = {
+            "song": title.strip(),
+            "artist": artist,
+            "difficulty": difficulty,
+            "chart_constant": constant_text,
+            "level": level,
+            "version": version,
+            "charter": charter or None,
+        }
+        if constant is None:
+            row["diagnostics"] = [{"type": "invalid_constant", "value": constant_text}]
+        if difficulty_warning:
+            row.setdefault("diagnostics", []).append(difficulty_warning)
+        rows.append(row)
     return rows
 
 
@@ -277,7 +319,19 @@ def scrape_song_pages(song_links):
         if index:
             time.sleep(REQUEST_DELAY_SECONDS)
         try:
-            rows.extend(fetch_song(link["page_title"]))
+            html, revision_id = fetch_page_with_revision(link["page_title"])
+            parsed_rows = parse_song_soup(
+                BeautifulSoup(html, "html.parser"), fallback_title=link["page_title"]
+            )
+            for row in parsed_rows:
+                row.update(
+                    {
+                        "source_page_title": link["page_title"],
+                        "source_url": link["url"],
+                        "source_revision": str(revision_id or ""),
+                    }
+                )
+            rows.extend(parsed_rows)
         except ScrapeError as error:  # Keep crawling and let the publish gate decide.
             failures.append(
                 {
@@ -294,6 +348,7 @@ def _collect_song_rows(tables):
     songs = []
     for table in tables:
         current_song = ""
+        current_charter = ""
         current_rows = []
         remaining_rowspan = 0
         for row in table.select("tr"):
@@ -302,8 +357,8 @@ def _collect_song_rows(tables):
                 continue
             if remaining_rowspan:
                 remaining_rowspan -= 1
-                if len(cells) >= 2:
-                    current_rows.append((cells[0].get_text(" ", strip=True), cells[1].get_text(" ", strip=True)))
+                if cells:
+                    current_rows.append((current_charter, cells[0].get_text(" ", strip=True)))
                 continue
             if current_song and current_rows:
                 songs.append((current_song, current_rows))
@@ -316,6 +371,7 @@ def _collect_song_rows(tables):
             link = cells[0].find("a")
             song_text = link.get_text(" ", strip=True) if link else cells[0].get_text(" ", strip=True)
             current_song = _normalized_title(song_text)
+            current_charter = cells[1].get_text(" ", strip=True)
             current_rows.append((cells[1].get_text(" ", strip=True), cells[2].get_text(" ", strip=True)))
         if current_song and current_rows:
             songs.append((current_song, current_rows))
