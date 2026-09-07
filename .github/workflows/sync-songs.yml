@@ -1,4 +1,4 @@
-# Sync songs: scrape Songs by Level, download wiki images, upload to Supabase Storage, upsert into songs table.
+# Sync songs: scrape Miraheze song pages and publish validated rows to Supabase.
 # Runs on schedule and can be triggered manually.
 # Uses the PROD environment: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY as Variables, and SUPABASE_SERVICE_ROLE_KEY as a Secret.
 
@@ -6,8 +6,8 @@ name: Sync songs to Supabase
 
 on:
   schedule:
-    # Daily at 4:00 UTC
-    - cron: "0 4 * * *"
+    # 8:00 PM CST (02:00 UTC the following day), every other calendar day.
+    - cron: "0 2 */2 * *"
   workflow_dispatch:
 
 jobs:
@@ -44,3 +44,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python pipeline.py
+
+      - name: Upload sync diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: song-sync-diagnostics-${{ github.run_id }}
+          path: data-pipeline/snapshots/
+          if-no-files-found: warn
+          retention-days: 14

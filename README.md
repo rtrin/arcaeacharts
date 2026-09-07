@@ -7,7 +7,7 @@ A basic web application for browsing and searching Arcaea charts.
 ### **Search & Filtering**
 - **Text Search**: Search by song title, artist, or chart constant
 - **Difficulty Range**:  Slider for filtering by chart constant (1.0 - 12.0+)
-- **Difficulty Types**: Filter by Future, Eternal, and Beyond difficulties
+- **Difficulty Types**: Filter by Future, Eternal, Beyond, and Inscribed difficulties
 
 ### **Chart View**
 - **YouTube Integration**: Each song card includes a "Chart View" button
@@ -68,7 +68,9 @@ For detailed Supabase setup instructions, see [SUPABASE_SETUP.md](SUPABASE_SETUP
 
 ## Data Pipeline
 
-The `data-pipeline/` directory scrapes Arcaea chart metadata and syncs it to Supabase:
+The `data-pipeline/` directory discovers song links from the Miraheze
+[Song list](https://arcaea.miraheze.org/wiki/Song_list), scrapes each linked
+page, validates the complete dataset, and syncs it to Supabase:
 
 ```bash
 cd data-pipeline
@@ -77,6 +79,10 @@ python pipeline.py
 ```
 
 The GitHub Actions workflow runs the sync daily at 4:00 UTC or manually from the Actions tab. Configure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the repository's `PROD` environment.
+
+The pipeline uses bounded retries and rate limiting, writes validation
+diagnostics to `data-pipeline/snapshots/`, and fails closed when the source is
+incomplete. It supports Future, Eternal, Beyond, and Inscribed chart rows.
 
 ## Contributing
 

@@ -185,6 +185,8 @@ const Index = () => {
                         ? "BYD"
                         : difficulty === "Future"
                           ? "FTR"
+                          : difficulty === "Inscribed"
+                            ? "INS"
                           : difficulty.slice(0, 3).toUpperCase()}
                   </Button>
                 ))}

@@ -1,45 +1,35 @@
 #!/usr/bin/env python3
-"""
-Full sync pipeline: scrape Songs by Level, filter to Future/Eternal/Beyond, upsert into songs table.
+"""Validate and publish a complete Miraheze song catalog."""
 
-Credentials from env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (required for writes).
-"""
-
+import hashlib
+import json
 import logging
+import math
 import os
 import re
 import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
 
-from supabase import create_client, Client  # pylint: disable=import-error
+from supabase import Client, create_client  # pylint: disable=import-error
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
 from scraper import (
-    scrape_songs_by_level, fetch_song, scrape_news_links, filter_song_pages,
+    SUPPORTED_DIFFICULTIES,
+    ScrapeError,
     scrape_chart_designers,
+    scrape_song_catalog,
+    scrape_song_pages,
 )
 
-# -----------------------------------------------------------------------------
-# Env & Config
-# -----------------------------------------------------------------------------
-
-def _load_env() -> None:
-    
-    """Load .env via python-dotenv when available."""
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
-
-def _get_supabase_credentials() -> tuple[str, str]:
-    """Return (url, key) from env."""
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-    if not url or not key:
-        raise RuntimeError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
-        )
-    return url, key
-
-_load_env()
+SNAPSHOT_DIR = Path(os.environ.get("SONG_SNAPSHOT_DIR", "snapshots"))
+MIN_LINK_COUNT = int(os.environ.get("SONG_MIN_LINK_COUNT", "100"))
+MAX_FAILURE_RATIO = float(os.environ.get("SONG_MAX_FAILURE_RATIO", "0.05"))
+REQUIRED_DIFFICULTIES = {"Future", "Eternal", "Beyond"}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,148 +38,210 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def _parse_level(level_str: str) -> int | None:
-    """Extract the leading integer from a level string (e.g. '9+' → 9)."""
-    if not level_str:
-        return None
-    match = re.match(r"(\d+)", level_str)
-    return int(match.group(1)) if match else None
+
+def _load_env():
+    """Load .env when python-dotenv is available."""
+    if load_dotenv:
+        load_dotenv()
+
+
+def _get_supabase_credentials():
+    """Return Supabase credentials from the environment."""
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.")
+    return url, key
 
 
 def get_supabase_client() -> Client:
-    """Create and return Supabase client using env credentials."""
-    url, key = _get_supabase_credentials()
-    return create_client(url, key)
+    """Create a Supabase client."""
+    return create_client(*_get_supabase_credentials())
 
 
-def run_pipeline() -> None:
-    """Run sync: scrape songs by level, upsert to DB (metadata only)."""
-    supabase = get_supabase_client()
+def _parse_level(value):
+    """Extract the leading integer from a level string."""
+    match = re.match(r"\s*(\d+)", str(value or ""))
+    return int(match.group(1)) if match else None
 
-    # 1. Scrape Songs by Level
-    rows = scrape_songs_by_level()
+
+def _normalize_row(row, charter_lookup):
+    """Normalize one scraper row to the songs table shape."""
+    title = re.sub(r"\s+", " ", str(row.get("song") or "")).strip()
+    artist = re.sub(r"\s+", " ", str(row.get("artist") or "")).strip()
+    difficulty = str(row.get("difficulty") or "").strip()
+    level = _parse_level(row.get("level"))
+    try:
+        constant = float(row.get("chart_constant"))
+    except (TypeError, ValueError):
+        constant = None
+    if constant is not None and (not math.isfinite(constant) or constant > 13):
+        constant = None
+    version = str(row.get("version") or "").strip()
+    key = (title.casefold(), difficulty)
+    charter = row.get("charter") or charter_lookup.get(key)
+    return {
+        "title": title,
+        "artist": artist,
+        "difficulty": difficulty,
+        "constant": constant,
+        "level": level,
+        "version": version,
+        "charter": charter,
+    }
+
+
+def _normalize_rows(rows, charter_lookup):
+    """Normalize, validate, and deduplicate scraped rows."""
+    unique_rows = {}
+    errors = []
+    for index, row in enumerate(rows):
+        normalized = _normalize_row(row, charter_lookup)
+        key = (normalized["title"], normalized["artist"], normalized["difficulty"])
+        if normalized["difficulty"] not in SUPPORTED_DIFFICULTIES:
+            continue
+        missing = [
+            field for field in ("title", "artist", "difficulty", "level", "version")
+            if not normalized[field]
+        ]
+        if normalized["constant"] is None or normalized["level"] is None:
+            missing.append("constant/level")
+        if missing:
+            errors.append({"row": index, "fields": missing, "data": normalized})
+            continue
+        previous = unique_rows.get(key)
+        if previous and previous != normalized:
+            errors.append({"row": index, "error": "conflicting duplicate", "data": normalized})
+            continue
+        unique_rows[key] = normalized
+    return list(unique_rows.values()), errors
+
+
+def _snapshot_path(name):
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    return SNAPSHOT_DIR / name
+
+
+def _write_snapshot(snapshot, successful):
+    """Persist diagnostics even when the run fails validation."""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = _snapshot_path(f"song-sync-{timestamp}.json")
+    path.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False), encoding="utf-8")
+    if successful:
+        _snapshot_path("last-successful.json").write_text(
+            json.dumps(snapshot, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    logger.info("Wrote %s snapshot to %s", "successful" if successful else "failed", path)
+
+
+def _dataset_hash(rows):
+    payload = json.dumps(rows, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _validate_catalog(links, failures, rows, errors):
+    """Return validation errors for a candidate crawl."""
+    validation_errors = []
+    if len(links) < MIN_LINK_COUNT:
+        validation_errors.append(f"Only {len(links)} song links found; minimum is {MIN_LINK_COUNT}")
+    failure_ratio = len(failures) / len(links) if links else 1
+    if failure_ratio > MAX_FAILURE_RATIO:
+        validation_errors.append(
+            f"Detail-page failure ratio {failure_ratio:.2%} exceeds {MAX_FAILURE_RATIO:.2%}"
+        )
     if not rows:
-        logger.error("No rows from scrape. Exiting.")
-        return
+        validation_errors.append("No valid supported song rows were produced")
+    present = {row["difficulty"] for row in rows}
+    missing = REQUIRED_DIFFICULTIES - present
+    if missing:
+        validation_errors.append(f"Missing required difficulty rows: {sorted(missing)}")
+    if errors:
+        validation_errors.append(f"{len(errors)} row validation errors")
+    return validation_errors
 
-    # 1b. Gap Check (News Section Songs vs Songs_by_Level)
-    # Automatically scrape song links from the News section and check for missing songs.
-    
-    logger.info("Scraping News section for new songs...")
-    try:
-        # Get all page links from News section
-        news_page_titles = scrape_news_links()
-        
-        # Filter to only song pages using API
-        song_titles = filter_song_pages(news_page_titles)
-        
-        if not song_titles:
-            logger.info("No song pages found in News section.")
-        else:
-            # Normalize existing titles for comparison
-            existing_titles_csv = set((r.get("song") or "").strip().lower() for r in rows)
-            
-            # Find missing songs
-            missing_titles = []
-            for title in song_titles:
-                # Normalize for comparison (replace underscores, lowercase)
-                norm_title = title.replace("_", " ").strip().lower()
-                if norm_title not in existing_titles_csv:
-                    missing_titles.append(title)
-            
-            logger.info(f"Found {len(missing_titles)} new songs from News section.")
-            
-            # Fetch missing songs
-            fetched_count = 0
-            for m_title in missing_titles:
-                new_entries = fetch_song(m_title)
-                if new_entries:
-                    logger.info(f"Added new song: {m_title}")
-                    rows.extend(new_entries)
-                    fetched_count += 1
-                else:
-                    logger.warning(f"Could not parse data for {m_title}")
-                    
-            logger.info(f"Added {fetched_count} new songs from News section.")
-        
-    except Exception as e:
-        logger.error(f"News section scraping failed: {e}")
-        # We continue with what we have
 
-    # 1c. Scrape chart designer names
-    charter_lookup = {}
-    try:
-        charter_lookup = scrape_chart_designers()
-        logger.info("Loaded %d charter entries.", len(charter_lookup))
-    except Exception as e:
-        logger.error(f"Charter scraping failed: {e}")
-
-    # 2. Build rows for upsert (Metadata Only)
-    unique_rows = {}  # (title, artist, difficulty) -> row_dict
-    
-    for row in rows:
-        # Standardize fields
-        const_val = row.get("chart_constant")
-        if const_val in [None, "", "-"]:
-             const_val = None
-        else:
-             try:
-                 const_val = float(const_val)
-             except (ValueError, TypeError):
-                 const_val = None
-
-        # Exclude songs with constant > 13 per user request
-        if const_val is not None and const_val > 13:
-            continue
-
-        r = {
-            "title": (row.get("song") or "").strip(),
-            "artist": (row.get("artist") or "").strip(),
-            "difficulty": (row.get("difficulty") or "").strip(),
-            "constant": const_val,
-            "level": _parse_level((row.get("level") or "").strip()),
-            "version": (row.get("version") or "").strip(),
+def _publish_rows(supabase, rows, source_revision, snapshot):
+    """Stage rows and atomically publish them through the database function."""
+    run_id = str(uuid4())
+    supabase.table("song_sync_runs").insert(
+        {
+            "id": run_id,
+            "status": "staged",
+            "source_revision": str(source_revision or ""),
+            "row_count": len(rows),
+            "dataset_hash": snapshot["dataset_hash"],
+            "details": snapshot,
         }
-        if r["difficulty"] not in {"Future", "Eternal", "Beyond"}:
-            continue
-        norm_title = r["title"].strip().lower()
-        r["charter"] = charter_lookup.get((norm_title, r["difficulty"]))
-        key = (r["title"], r["artist"], r["difficulty"])
-        unique_rows[key] = r
-
-    db_rows = list(unique_rows.values())
-
-    # Filter out rows with null chart constants before upload
-    pre_filter_count = len(db_rows)
-    db_rows = [r for r in db_rows if r["constant"] is not None]
-    null_filtered = pre_filter_count - len(db_rows)
-    if null_filtered:
-        logger.info("Excluded %d rows with null chart constant.", null_filtered)
-    
-    # 3. Upsert into Supabase
-    batch_size = 100
-    total = 0
-    for i in range(0, len(db_rows), batch_size):
-        batch = db_rows[i : i + batch_size]
-        supabase.table("songs").upsert(
-            batch,
-            on_conflict="title,artist,difficulty",
-            ignore_duplicates=False, # Update existing
-        ).execute()
-        total += len(batch)
-        logger.info("Upserted rows %d-%d", i + 1, total)
-    logger.info("Done. Upserted %d rows into songs table.", total)
+    ).execute()
+    staged_rows = [{"run_id": run_id, **row} for row in rows]
+    for start in range(0, len(staged_rows), 100):
+        supabase.table("song_sync_staging").insert(staged_rows[start:start + 100]).execute()
+    supabase.rpc("publish_song_sync", {"p_run_id": run_id}).execute()
+    logger.info("Published %d rows from sync run %s", len(rows), run_id)
 
 
-def main() -> int:
+def run_pipeline():
+    """Run the complete scrape, validation, snapshot, and publish flow."""
+    snapshot: dict[str, object] = {
+        "source_url": "https://arcaea.miraheze.org/wiki/Song_list",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "status": "failed",
+    }
+    try:
+        links, source_revision = scrape_song_catalog()
+        snapshot["source_revision"] = source_revision or ""
+        snapshot["discovered_link_count"] = len(links)
+        logger.info("Discovered %d song links from Miraheze.", len(links))
+
+        rows, failures = scrape_song_pages(links)
+        snapshot["failed_pages"] = failures
+        snapshot["failed_page_count"] = len(failures)
+
+        charter_lookup = {}
+        try:
+            charter_lookup = scrape_chart_designers()
+        except ScrapeError as error:  # Charter is enrichment, not a publish blocker.
+            snapshot["charter_error"] = str(error)
+            logger.warning("Charter enrichment failed: %s", error)
+
+        normalized_rows, row_errors = _normalize_rows(rows, charter_lookup)
+        validation_errors = _validate_catalog(links, failures, normalized_rows, row_errors)
+        counts = {difficulty: 0 for difficulty in sorted(SUPPORTED_DIFFICULTIES)}
+        for row in normalized_rows:
+            counts[row["difficulty"]] += 1
+        snapshot.update(
+            {
+                "successful_page_count": len(links) - len(failures),
+                "row_count": len(normalized_rows),
+                "row_counts_by_difficulty": counts,
+                "validation_errors": validation_errors,
+                "row_errors": row_errors,
+                "dataset_hash": _dataset_hash(normalized_rows),
+            }
+        )
+        if validation_errors:
+            raise ScrapeError("; ".join(validation_errors))
+
+        supabase = get_supabase_client()
+        _publish_rows(supabase, normalized_rows, source_revision, snapshot)
+        snapshot["status"] = "success"
+        _write_snapshot(snapshot, successful=True)
+    except Exception as error:
+        snapshot["error"] = str(error)
+        _write_snapshot(snapshot, successful=False)
+        logger.error("Pipeline failed: %s", error)
+        raise
+
+
+def main():
     """CLI entry point."""
+    _load_env()
     try:
         run_pipeline()
-        return 0
-    except Exception as err:
-        logger.error("Pipeline failed: %s", err)
-        raise SystemExit(1) from err
+    except Exception as error:
+        logger.error("Pipeline failed: %s", error)
+        raise SystemExit(1) from error
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

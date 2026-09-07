@@ -118,8 +118,7 @@ export function processYouTubeItems(items, songTitle, difficulty) {
   // Prepare the search term: normalized and lowercased
   const normalizedSongTitle = normalizeSongTitle(songTitle).toLowerCase();
   
-  const specializedTerms = ['Future', 'Beyond', 'Eternal'];
-  const normalizedDifficulty = difficulty ? difficulty.toLowerCase() : '';
+   const normalizedDifficulty = difficulty ? difficulty.toLowerCase() : '';
 
   // Score each item
   const scoredItems = items.map(item => {
@@ -148,6 +147,7 @@ export function processYouTubeItems(items, songTitle, difficulty) {
       'beyond': ['beyond', 'byd'],
       'future': ['future', 'ftr'],
       'eternal': ['eternal', 'etr'],
+      'inscribed': ['inscribed', 'ins'],
     };
 
     if (normalizedDifficulty) {
@@ -194,7 +194,7 @@ export function getSearchQuery(songTitle, difficulty) {
 
   // 4. Construct Query
   // Always prefix with "Arcaea"
-  if (['Future', 'Beyond', 'Eternal'].includes(difficulty)) {
+   if (['Future', 'Beyond', 'Eternal', 'Inscribed'].includes(difficulty)) {
     return `Arcaea ${queryTitle} ${difficulty} chart view`;
   }
   return `Arcaea ${queryTitle} chart view`;
