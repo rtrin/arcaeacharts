@@ -275,11 +275,11 @@ const Index = () => {
                         </div>
                       </div>
 
-                      {/* Rating column: rating at 9.8M, 9.9M, 10M */}
+                      {/* Rating column: rating at EX, EX+, PM thresholds */}
                       {song.constant != null && (
                         <div
                           className="flex flex-col gap-1 sm:gap-1.5 min-w-[72px] sm:min-w-[90px] md:min-w-[120px] px-2 sm:px-3 py-1.5 sm:py-2 font-mono text-xs sm:text-sm"
-                          aria-label="Play rating at 9.8M, 9.9M, 10M score"
+                          aria-label="Play rating at EX, EX+, PM score thresholds"
                         >
                           <div
                             className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide"
@@ -288,11 +288,11 @@ const Index = () => {
                             Rating
                           </div>
                           <div className="flex justify-between gap-2 sm:gap-3 font-medium text-muted-foreground">
-                            <span style={{ color: "#4e356f" }}>980</span>
+                            <span style={{ color: "#4e356f" }}>EX</span>
                             <span className="text-foreground">{calculatePlayRating(song.constant, 9800000).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between gap-2 sm:gap-3 font-medium text-muted-foreground">
-                            <span style={{ color: "#4e356f" }}>990</span>
+                            <span style={{ color: "#4e356f" }}>EX+</span>
                             <span className="text-foreground">{calculatePlayRating(song.constant, 9900000).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between gap-2 sm:gap-3 font-medium text-muted-foreground">
