@@ -27,6 +27,8 @@ This guide explains how to set up your own database backend for a song chart bro
 ```env
 VITE_SUPABASE_URL=your_project_url_here
 VITE_SUPABASE_ANON_KEY=your_anon_key_here
+# Optional; Google is hidden unless this is exactly true and enabled in Supabase.
+VITE_GOOGLE_AUTH_ENABLED=false
 ```
 
 3. Replace the placeholder values with your actual credentials from Step 2
@@ -130,4 +132,4 @@ Once your basic setup is working, you can:
 - Set up automatic data backups
 - Add user authentication for admin features
 - Implement data caching for better performance
-- Add more advanced search features 
+- Add more advanced search features

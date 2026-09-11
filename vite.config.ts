@@ -101,7 +101,7 @@ function apiPlugin(env: Record<string, string>): Plugin {
         try {
           const difficulty = songDifficulty || '';
           
-          // @ts-ignore
+          // @ts-expect-error The JavaScript API helper has no declaration file.
           const { getSearchQuery, processYouTubeItems } = await import('./api/video-utils.mjs');
           const searchQuery = getSearchQuery(songTitle, difficulty);
 
@@ -123,10 +123,12 @@ function apiPlugin(env: Record<string, string>): Plugin {
           );
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({})) as any;
+            const errorData = await response.json().catch(() => ({})) as {
+              error?: { errors?: Array<{ reason?: string }>; message?: string };
+            };
 
             // Check for quota exceeded error
-            const isQuotaExceeded = errorData.error?.errors?.some((e: any) => e.reason === 'quotaExceeded');
+            const isQuotaExceeded = errorData.error?.errors?.some((e) => e.reason === 'quotaExceeded');
             if (isQuotaExceeded) {
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');

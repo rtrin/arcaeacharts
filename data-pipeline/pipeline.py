@@ -244,6 +244,7 @@ def _read_database_rows(supabase):
         response = (
             supabase.table("songs")
             .select(DATABASE_FIELDS)
+            .eq("is_active", True)
             .order("title")
             .order("artist")
             .order("difficulty")
@@ -278,7 +279,10 @@ def _reconcile_rows(candidate_rows, database_rows):
         "unchanged": unchanged,
         "stale": stale,
         "replaced": replaced,
-        "deleted": stale,
+        "retired": stale,
+        # Keep the legacy artifact key for consumers of older snapshots. No
+        # catalog row is deleted by the retirement-compatible publisher.
+        "deleted": [],
     }
 
 
@@ -287,7 +291,7 @@ def _diff_summary(diff):
 
 
 def _empty_diff():
-    return {key: [] for key in ("added", "changed", "unchanged", "stale", "replaced", "deleted")}
+    return {key: [] for key in ("added", "changed", "unchanged", "stale", "replaced", "retired", "deleted")}
 
 
 def _write_artifacts(snapshot, rows, diff):
@@ -463,7 +467,8 @@ def run_pipeline():  # pylint: disable=too-many-locals,too-many-statements
         snapshot["diff_summary"] = _diff_summary(diff)
         snapshot["source_complete"] = not failures
         validation_errors.extend(_validate_difficulty_regression(normalized_rows, database_rows))
-        diff["deleted"] = diff["stale"] if not failures and not validation_errors else []
+        diff["retired"] = diff["stale"] if not failures and not validation_errors else []
+        diff["deleted"] = []
         snapshot["diff_summary"] = _diff_summary(diff)
         snapshot["validation_errors"] = validation_errors
         _write_artifacts(snapshot, normalized_rows, diff)

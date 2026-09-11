@@ -31,8 +31,10 @@ graph TD
 Requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment or in `.env`.
 
 Apply migrations `001_add_charter_column.sql`,
-`002_reliable_song_sync.sql`, and `003_source_fidelity.sql` in order before the
-first production publish. A complete crawl reconciles stale rows in the same database function;
+`002_reliable_song_sync.sql`, `003_source_fidelity.sql`, and
+`004_score_archive_phase_1.sql` in order before the first production publish.
+A complete crawl reconciles stale rows in the same database function by marking
+them inactive rather than deleting them;
 an incomplete crawl only upserts rows and leaves stale data untouched. Inscribed
 replaces Beyond for the same song only during a complete reconciliation.
 

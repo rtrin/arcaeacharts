@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 // unused imports removed
 import { VideoOverlay } from "@/components/VideoOverlay";
+import { AccountNav } from "@/components/AccountNav";
 
 import { useSongs } from "@/hooks/useSongs";
 import { useSongFilter } from "@/hooks/useSongFilter";
@@ -58,10 +59,10 @@ const Index = () => {
 
   return (
     <div className="flex flex-col min-h-screen items-center">
-      <header className="py-10">
-        <div className="flex flex-row items-center justify-center gap-x-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-[#4e356f]">
+      <header className="w-full px-4 py-6 md:py-10">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-[#4e356f] md:text-5xl">
               Arcaea Charts
             </h1>
             <img
@@ -70,6 +71,7 @@ const Index = () => {
               className="h-16 md:h-20 w-auto object-contain"
             />
           </div>
+          <AccountNav />
         </div>
       </header>
       <main className="container px-4 md:px-24 lg:px-48">
