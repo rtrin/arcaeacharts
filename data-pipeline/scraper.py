@@ -7,7 +7,7 @@ import re
 import time
 from html import unescape
 from decimal import Decimal, InvalidOperation
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import quote, unquote, urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -44,6 +44,10 @@ class ScrapeError(RuntimeError):
     """Raised when a source response cannot be safely consumed."""
 
 
+class ApiAccessError(ScrapeError):
+    """Raised when the MediaWiki API is inaccessible but page views may work."""
+
+
 def _session():
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
@@ -59,6 +63,8 @@ def _request(params, page_title):
     for attempt in range(MAX_RETRIES):
         try:
             response = SESSION.get(API_URL, params=params, timeout=REQUEST_TIMEOUT)
+            if response.status_code == 403:
+                raise ApiAccessError(f"HTTP 403 for {page_title}")
             if response.status_code == 429 or response.status_code >= 500:
                 retry_after = response.headers.get("Retry-After")
                 delay = float(retry_after) if retry_after and retry_after.isdigit() else 2 ** attempt
@@ -67,7 +73,31 @@ def _request(params, page_title):
                 continue
             response.raise_for_status()
             return response.json()
+        except ApiAccessError:
+            raise
         except (requests.RequestException, ValueError, ScrapeError) as error:
+            last_error = error
+            if attempt < MAX_RETRIES - 1:
+                time.sleep((2 ** attempt) + random.uniform(0, 0.25))
+    raise ScrapeError(f"Failed to fetch {page_title}: {last_error}") from last_error
+
+
+def _fetch_page_html(page_title):
+    """Fetch a rendered page when the API is blocked by the source CDN."""
+    url = f"{MIRAHEZE_ORIGIN}/wiki/{quote(page_title.replace(' ', '_'))}"
+    last_error = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+            if response.status_code == 429 or response.status_code >= 500:
+                retry_after = response.headers.get("Retry-After")
+                delay = float(retry_after) if retry_after and retry_after.isdigit() else 2 ** attempt
+                time.sleep(delay + random.uniform(0, 0.25))
+                last_error = ScrapeError(f"HTTP {response.status_code} for {page_title}")
+                continue
+            response.raise_for_status()
+            return response.text
+        except requests.RequestException as error:
             last_error = error
             if attempt < MAX_RETRIES - 1:
                 time.sleep((2 ** attempt) + random.uniform(0, 0.25))
@@ -76,16 +106,19 @@ def _request(params, page_title):
 
 def fetch_page_via_api(page_title):
     """Fetch parsed HTML for a MediaWiki page."""
-    data = _request(
-        {
-            "action": "parse",
-            "page": page_title,
-            "prop": "text|revid",
-            "format": "json",
-            "redirects": "1",
-        },
-        page_title,
-    )
+    try:
+        data = _request(
+            {
+                "action": "parse",
+                "page": page_title,
+                "prop": "text|revid",
+                "format": "json",
+                "redirects": "1",
+            },
+            page_title,
+        )
+    except ApiAccessError:
+        return _fetch_page_html(page_title)
     if "error" in data:
         raise ScrapeError(data["error"].get("info", str(data["error"])))
     parsed = data.get("parse", {})
@@ -97,16 +130,21 @@ def fetch_page_via_api(page_title):
 
 def fetch_page_with_revision(page_title):
     """Fetch parsed HTML and the source revision ID."""
-    data = _request(
-        {
-            "action": "parse",
-            "page": page_title,
-            "prop": "text|revid",
-            "format": "json",
-            "redirects": "1",
-        },
-        page_title,
-    )
+    try:
+        data = _request(
+            {
+                "action": "parse",
+                "page": page_title,
+                "prop": "text|revid",
+                "format": "json",
+                "redirects": "1",
+            },
+            page_title,
+        )
+    except ApiAccessError:
+        html = _fetch_page_html(page_title)
+        revision = re.search(r'"wgRevisionId":(\d+)', html)
+        return html, revision.group(1) if revision else None
     if "error" in data:
         raise ScrapeError(data["error"].get("info", str(data["error"])))
     parsed = data.get("parse", {})
