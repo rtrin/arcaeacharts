@@ -13,14 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-if TYPE_CHECKING:
-    from supabase import Client
-
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
-
+from dotenv import load_dotenv
 from scraper import (
     SUPPORTED_DIFFICULTIES,
     ScrapeError,
@@ -28,6 +21,9 @@ from scraper import (
     scrape_song_catalog,
     scrape_song_pages,
 )
+
+if TYPE_CHECKING:
+    from supabase import Client
 
 SNAPSHOT_DIR = Path(os.environ.get("SONG_SNAPSHOT_DIR", "snapshots"))
 MIN_LINK_COUNT = int(os.environ.get("SONG_MIN_LINK_COUNT", "100"))
@@ -45,9 +41,8 @@ logger = logging.getLogger(__name__)
 
 
 def _load_env():
-    """Load .env when python-dotenv is available."""
-    if load_dotenv:
-        load_dotenv()
+    """Load environment variables from .env."""
+    load_dotenv()
 
 
 def _get_supabase_credentials():
