@@ -1,10 +1,11 @@
 import unittest
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 from bs4 import BeautifulSoup
 
-from scraper import _clean_constant, parse_song_soup
+from scraper import ApiAccessError, _clean_constant, fetch_page_with_revision, fetch_page_via_api, parse_song_soup
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "song-inscribed.html"
@@ -45,6 +46,16 @@ class ScraperTests(unittest.TestCase):
         self.assertEqual(_clean_constant("9.7"), Decimal("9.7"))
         self.assertEqual(_clean_constant("10.7"), Decimal("10.7"))
         self.assertIsNone(_clean_constant("8.7-8.8"))
+
+    @patch("scraper._fetch_page_html", return_value='<script>RLCONF={"wgRevisionId":15249}</script>')
+    @patch("scraper._request", side_effect=ApiAccessError("HTTP 403 for Song_list"))
+    def test_api_403_falls_back_to_rendered_page(self, _request, fetch_html):
+        self.assertEqual(fetch_page_via_api("Song_list"), '<script>RLCONF={"wgRevisionId":15249}</script>')
+        self.assertEqual(
+            fetch_page_with_revision("Song_list"),
+            ('<script>RLCONF={"wgRevisionId":15249}</script>', "15249"),
+        )
+        self.assertEqual(fetch_html.call_count, 2)
 
 
 if __name__ == "__main__":
