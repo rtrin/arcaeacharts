@@ -46,7 +46,6 @@ export const useSongs = () => {
               level: song.level,
               version: song.version,
               charter: song.charter,
-              is_active: song.is_active,
             }));
             saveSummariesToCache(summaries);
             // Update comprehensive list

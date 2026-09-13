@@ -26,7 +26,7 @@ A basic web application for browsing and searching Arcaea charts.
 ## Getting Started
 
 ### Prerequisites
-- Node.js 22+
+- Node.js 18+ 
 - npm or yarn
 - Supabase account (for database)
 
@@ -46,18 +46,13 @@ A basic web application for browsing and searching Arcaea charts.
 3. **Set up environment variables**
    ```bash
    # Create a .env.local file
-    echo "VITE_SUPABASE_URL=your_supabase_project_url" >> .env.local
-    echo "VITE_SUPABASE_ANON_KEY=your_supabase_anon_key" >> .env.local
-    echo "VITE_GOOGLE_AUTH_ENABLED=false" >> .env.local
+   echo "VITE_SUPABASE_URL=your_supabase_project_url" >> .env.local
+   echo "VITE_SUPABASE_ANON_KEY=your_supabase_anon_key" >> .env.local
    
    # Optional: For YouTube chart view videos
    # Add the following to Vercel environment variables:
-    YOUTUBE_API_KEY=your_youtube_api_key
-    ```
-
-    Google sign-in is rendered only when `VITE_GOOGLE_AUTH_ENABLED=true` and
-    the Google provider is enabled in Supabase. Apply the migrations in
-    `data-pipeline/supabase/migrations` in order before using Score Archive.
+   YOUTUBE_API_KEY=your_youtube_api_key
+   ```
    
    **Note**: The YouTube API key is optional. Without it, the app will show demo videos for chart view functionality.
 

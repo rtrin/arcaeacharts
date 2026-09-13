@@ -7,7 +7,6 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/lib/score-records.test.ts src/auth/returnTo.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

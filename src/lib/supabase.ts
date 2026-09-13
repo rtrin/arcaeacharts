@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import type { ClearStatus, ScoreHistoryRow, ScoreRecord } from "@/lib/score-records";
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL || "https://your-project.supabase.co";
@@ -19,7 +18,6 @@ export interface Song {
   level: string;
   version: string;
   charter: string | null;
-  is_active?: boolean;
 }
 
 // Summary for caching (includes imageUrl for instant display)
@@ -33,14 +31,6 @@ export interface SongSummary {
   level: string;
   version: string;
   charter: string | null;
-  is_active?: boolean;
-}
-
-export interface Profile {
-  id: string;
-  display_name: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 // Cache key and expiration (24 hours)
@@ -62,7 +52,7 @@ export const getCachedSummaries = (): SongSummary[] | null => {
       return null;
     }
     
-     return (data as SongSummary[]).filter((song) => song.is_active !== false);
+    return data;
   } catch {
     return null;
   }
@@ -90,8 +80,7 @@ export const getAllSummaries = async (): Promise<SongSummary[]> => {
   while (true) {
     const { data, error } = await supabase
       .from("songs")
-      .select("id, title, artist, difficulty, constant, level, version, charter, is_active")
-      .eq("is_active", true)
+      .select("id, title, artist, difficulty, constant, level, version, charter")
       .range(from, from + pageSize - 1)
       .order("constant", { ascending: false });
 
@@ -126,7 +115,6 @@ export const getSongsPaginated = async (
   const { data, error, count } = await supabase
     .from("songs")
     .select("*", { count: "exact" })
-    .eq("is_active", true)
     .order("constant", { ascending: false })
     .range(offset, offset + pageSize - 1);
 
@@ -150,7 +138,6 @@ export const getSongs = async (): Promise<Song[]> => {
     const { data, error } = await supabase
       .from("songs")
       .select("*")
-      .eq("is_active", true)
       .range(from, from + pageSize - 1)
       .order("constant", { ascending: false });
 
@@ -174,95 +161,4 @@ export const getSongs = async (): Promise<Song[]> => {
   }
 
   return allSongs;
-};
-
-export const getProfile = async (userId: string): Promise<Profile> => {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, display_name, created_at, updated_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("Your profile is still being created. Please retry.");
-  return data as Profile;
-};
-
-export const updateProfile = async (
-  userId: string,
-  displayName: string | null,
-): Promise<Profile> => {
-  const normalizedName = displayName?.trim().slice(0, 80) || null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .update({ display_name: normalizedName })
-    .eq("id", userId)
-    .select("id, display_name, created_at, updated_at")
-    .single();
-  if (error) throw error;
-  return data as Profile;
-};
-
-export const getScoreHistory = async (userId: string): Promise<ScoreHistoryRow[]> => {
-  const { data: snapshot, error: snapshotError } = await supabase
-    .rpc("get_score_history_snapshot")
-    .single();
-  if (snapshotError) throw snapshotError;
-
-  const snapshotCreatedAt = (snapshot as { snapshot_created_at: string }).snapshot_created_at;
-  const rows: ScoreHistoryRow[] = [];
-  let cursor: { dateTaken: string; createdAt: string; id: number } | null = null;
-  const pageSize = 500;
-
-  while (true) {
-    let query = supabase
-      .from("score_records")
-      .select("id, user_id, song_id, difficulty, score, clear_status, date_taken, created_at, song:songs(id, title, artist, difficulty, constant, level, version)")
-      .eq("user_id", userId)
-      .lte("created_at", snapshotCreatedAt)
-      .order("date_taken", { ascending: false })
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(pageSize);
-
-    if (cursor) {
-      query = query.or(
-        `date_taken.lt.${cursor.dateTaken},and(date_taken.eq.${cursor.dateTaken},created_at.lt.${cursor.createdAt}),and(date_taken.eq.${cursor.dateTaken},created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
-      );
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    const page = (data ?? []) as unknown as ScoreHistoryRow[];
-    rows.push(...page);
-    if (page.length < pageSize) break;
-    const last = page[page.length - 1];
-    if (!last) break;
-    cursor = { dateTaken: last.date_taken, createdAt: last.created_at, id: last.id };
-  }
-
-  return rows;
-};
-
-export const insertScoreRecord = async (input: {
-  userId: string;
-  songId: number;
-  difficulty: string;
-  score: number;
-  clearStatus: ClearStatus;
-  dateTaken: string;
-}): Promise<ScoreRecord> => {
-  const { data, error } = await supabase
-    .from("score_records")
-    .insert({
-      user_id: input.userId,
-      song_id: input.songId,
-      difficulty: input.difficulty,
-      score: input.score,
-      clear_status: input.clearStatus,
-      date_taken: input.dateTaken,
-    })
-    .select("id, user_id, song_id, difficulty, score, clear_status, date_taken, created_at")
-    .single();
-  if (error) throw error;
-  return data as ScoreRecord;
 };
