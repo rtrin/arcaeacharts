@@ -4,7 +4,7 @@ from pathlib import Path
 
 from bs4 import BeautifulSoup
 
-from scraper import _clean_constant, parse_song_soup
+from scraper import _clean_constant, parse_song_list_html, parse_song_soup
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "song-inscribed.html"
@@ -45,6 +45,17 @@ class ScraperTests(unittest.TestCase):
         self.assertEqual(_clean_constant("9.7"), Decimal("9.7"))
         self.assertEqual(_clean_constant("10.7"), Decimal("10.7"))
         self.assertIsNone(_clean_constant("8.7-8.8"))
+
+    def test_song_list_recovers_a_missing_terminal_semicolon_from_link_text(self):
+        html = """
+        <table><tr><th>Song</th><th>Artist</th></tr>
+        <tr><td><a href="/wiki/World.execute(me)">world.execute(me);</a></td><td>Test</td></tr>
+        </table>
+        """
+
+        links = parse_song_list_html(html)
+
+        self.assertEqual(links[0]["page_title"], "world.execute(me);")
 
 if __name__ == "__main__":
     unittest.main()

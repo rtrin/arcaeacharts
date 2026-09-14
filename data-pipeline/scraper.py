@@ -154,13 +154,16 @@ def parse_song_list_html(html):
         title = _page_title_from_href(href)
         if not title:
             continue
+        display_title = link.get_text(" ", strip=True)
+        if display_title.casefold().rstrip(";") == title.casefold() and display_title.endswith(";"):
+            title = display_title
         key = _normalized_title(title)
         links.setdefault(
             key,
             {
                 "page_title": title,
                 "url": urljoin(MIRAHEZE_ORIGIN, href),
-                "display_title": link.get_text(" ", strip=True),
+                "display_title": display_title,
                 "artist": cells[1].get_text(" ", strip=True),
             },
         )
