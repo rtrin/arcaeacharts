@@ -128,7 +128,7 @@ def _normalize_rows(rows, charter_lookup):
     warnings = []
     for index, row in enumerate(rows):
         normalized = _normalize_row(row, charter_lookup)
-        key = (normalized["title"], normalized["artist"], normalized["difficulty"])
+        key = _row_key(normalized)
         if normalized["difficulty"] not in SUPPORTED_DIFFICULTIES:
             continue
         if row.get("diagnostics"):
@@ -196,7 +196,7 @@ def _row_hash(row):
 
 
 def _row_key(row):
-    return row["title"], row["artist"], row["difficulty"]
+    return row["title"], row["artist"], row["difficulty"], row["constant"]
 
 
 def _write_snapshot(snapshot, successful):

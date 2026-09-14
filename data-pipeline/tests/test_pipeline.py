@@ -40,7 +40,7 @@ class PipelineTests(unittest.TestCase):
         source, errors, _ = _normalize_rows(
             [
                 row("Added", "Future", "10", "10.0"),
-                row("Changed", "Future", "10+", "10.7"),
+                row("Changed", "Future", "10+", "10.0"),
                 row("Same", "Future", "9", "9.0"),
                 row("DREAD AREA", "Inscribed", "11+", "11.8"),
             ],
@@ -75,7 +75,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(_verification_mismatches(candidate, database, complete_crawl=False))
         self.assertTrue(_verification_mismatches(candidate, database, complete_crawl=True))
 
-    def test_inscribed_removes_beyond_and_conflicting_duplicates_block(self):
+    def test_inscribed_removes_beyond_and_preserves_chart_variants(self):
         rows, errors, _ = _normalize_rows(
             [
                 row("DREAD AREA", "Beyond", "11", "11.0"),
@@ -86,8 +86,15 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse(errors)
         self.assertEqual([item["difficulty"] for item in rows], ["Inscribed"])
 
-        _, duplicate_errors, _ = _normalize_rows(
+        variants, duplicate_errors, _ = _normalize_rows(
             [row("Last", "Future", "10", "10.0"), row("Last", "Future", "10+", "10.7")],
+            {},
+        )
+        self.assertEqual(len(variants), 2)
+        self.assertFalse(duplicate_errors)
+
+        _, duplicate_errors, _ = _normalize_rows(
+            [row("Last", "Future", "10", "10.0"), row("Last", "Future", "10+", "10.0")],
             {},
         )
         self.assertEqual(len(duplicate_errors), 1)
