@@ -16,6 +16,25 @@ MIRAHEZE_ORIGIN = "https://arcaea.miraheze.org"
 API_URL = f"{MIRAHEZE_ORIGIN}/w/api.php"
 SONG_LIST_PAGE = "Song_list"
 CHART_DESIGNERS_PAGE = "Chart_designers"
+MEDIAWIKI_NAMESPACES = {
+    "category",
+    "category talk",
+    "file",
+    "file talk",
+    "help",
+    "help talk",
+    "media",
+    "mediawiki",
+    "mediawiki talk",
+    "project",
+    "project talk",
+    "special",
+    "talk",
+    "template",
+    "template talk",
+    "user",
+    "user talk",
+}
 REQUEST_TIMEOUT = (10, 30)
 MAX_RETRIES = 4
 REQUEST_DELAY_SECONDS = 0.35
@@ -125,7 +144,8 @@ def _page_title_from_href(href):
     if parsed.netloc != urlparse(MIRAHEZE_ORIGIN).netloc or not parsed.path.startswith("/wiki/"):
         return None
     title = unquote(parsed.path.removeprefix("/wiki/")).replace("_", " ").strip()
-    if not title or ":" in title:
+    namespace = title.partition(":")[0].casefold()
+    if not title or namespace in MEDIAWIKI_NAMESPACES:
         return None
     return title
 

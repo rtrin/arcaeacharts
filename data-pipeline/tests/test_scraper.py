@@ -46,6 +46,19 @@ class ScraperTests(unittest.TestCase):
         self.assertEqual(_clean_constant("10.7"), Decimal("10.7"))
         self.assertIsNone(_clean_constant("8.7-8.8"))
 
+    def test_song_titles_with_colons_are_not_filtered_as_namespaces(self):
+        html = """
+        <table>
+          <tr><th>Song</th><th>Artist</th></tr>
+          <tr><td><a href="/wiki/Aether_Crest:_Astral">Aether Crest: Astral</a></td><td>Test</td></tr>
+          <tr><td><a href="/wiki/Category:Songs">Category:Songs</a></td><td>Test</td></tr>
+        </table>
+        """
+
+        links = parse_song_list_html(html)
+
+        self.assertEqual([link["page_title"] for link in links], ["Aether Crest: Astral"])
+
     def test_song_list_recovers_a_missing_terminal_semicolon_from_link_text(self):
         html = """
         <table><tr><th>Song</th><th>Artist</th></tr>
