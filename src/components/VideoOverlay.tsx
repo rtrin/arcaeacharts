@@ -247,7 +247,7 @@ export const VideoOverlay = ({ videoId, bookmarkScopeKey, isOpen, onClose }: Vid
       <Button onClick={() => setPlaybackRate(value => Math.min(2, value + 0.05))} variant="secondary" size="sm" className={`bg-black/70 hover:bg-black/90 text-white border border-white/20 ${isMobile ? "text-xs px-2 py-1 min-h-0 h-6" : ""}`}>+0.05</Button>
       <Button onClick={() => setPlaybackRate(value => Math.min(2, value + 0.25))} variant="secondary" size="sm" className={`bg-black/70 hover:bg-black/90 text-white border border-white/20 ${isMobile ? "text-xs px-2 py-1 min-h-0 h-6" : ""}`}>+0.25</Button>
     </div>
-    {showSlider && practiceRange.enabled && <div className="absolute bottom-6 left-8 right-8 z-50">
+    {showSlider && <div className="absolute bottom-6 left-8 right-8 z-50">
       <div className="flex items-center gap-4">
         <span className="text-white text-sm font-mono bg-black/50 px-2 py-1 rounded">{formatTime(currentTime)}</span>
         <div className="flex-1 bg-black/30 p-2 rounded-lg backdrop-blur-sm">
