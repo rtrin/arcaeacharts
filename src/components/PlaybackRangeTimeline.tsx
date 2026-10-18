@@ -16,7 +16,13 @@ const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${Math.floo
 export function PlaybackRangeTimeline({ duration, range, current, mobile, enabled, setEndpoint, seek }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const activePointer = useRef<{ id: number; kind: DragKind } | null>(null);
-  const percentage = (time: number) => `${Math.max(0, Math.min(100, duration > 0 ? time / duration * 100 : 0))}%`;
+  const valid = enabled && Number.isFinite(duration) && duration > 0;
+  const safeDuration = valid ? duration : 1;
+  const percentage = (time: number) => `${Math.max(0, Math.min(100, valid ? time / safeDuration * 100 : 0))}%`;
+  const currentPosition = Math.max(range[0], Math.min(range[1], current));
+  const progressWidth = valid
+    ? `${Math.max(0, Math.min(100, (currentPosition - range[0]) / safeDuration * 100))}%`
+    : "0%";
 
   const timeAtPointer = (event: React.PointerEvent<HTMLDivElement | HTMLButtonElement>) => {
     const rect = trackRef.current?.getBoundingClientRect();
@@ -28,6 +34,7 @@ export function PlaybackRangeTimeline({ duration, range, current, mobile, enable
   };
 
   const update = (event: React.PointerEvent<HTMLDivElement | HTMLButtonElement>, kind: DragKind) => {
+    if (!valid) return;
     const value = timeAtPointer(event);
     if (value === null) return;
     if (kind === "in") {
@@ -42,7 +49,7 @@ export function PlaybackRangeTimeline({ duration, range, current, mobile, enable
   };
 
   const startDrag = (event: React.PointerEvent<HTMLDivElement | HTMLButtonElement>, kind: DragKind) => {
-    if (!enabled || !event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    if (!valid || !enabled || !event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
     event.preventDefault();
     event.stopPropagation();
     if (kind !== "track" && event.currentTarget instanceof HTMLButtonElement) {
@@ -86,52 +93,58 @@ export function PlaybackRangeTimeline({ duration, range, current, mobile, enable
       role="slider"
       aria-label={kind === "in" ? "In point" : "Out point"}
       aria-orientation="horizontal"
-      aria-valuemin={kind === "in" ? 0 : range[0] + Math.min(0.25, duration / 2)}
-      aria-valuemax={kind === "in" ? range[1] - Math.min(0.25, duration / 2) : duration}
-      aria-valuenow={value}
+      aria-valuemin={valid ? (kind === "in" ? 0 : range[0] + Math.min(0.25, duration / 2)) : undefined}
+      aria-valuemax={valid ? (kind === "in" ? range[1] - Math.min(0.25, duration / 2) : duration) : undefined}
+      aria-valuenow={valid ? value : undefined}
       aria-valuetext={formatTime(value)}
       onPointerDown={event => startDrag(event, kind)}
       onPointerMove={moveDrag}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onLostPointerCapture={endDrag}
-      onKeyDown={event => handleKey(event, kind)}
-      className="absolute top-1/2 z-20 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white ring-2 ring-blue-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-yellow-300"
+      onKeyDown={event => valid && handleKey(event, kind)}
+      disabled={!valid}
+      className="absolute top-1/2 z-20 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-hidden focus-visible:ring-4 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
       style={{ left: percentage(value) }}
-    />;
+    >
+      <span className="block size-4 shrink-0 rounded-full border border-primary bg-background shadow-sm transition-[color,box-shadow] hover:ring-4" />
+    </button>;
   };
 
   return <div
     ref={trackRef}
     data-allow-click="true"
-    className="relative h-12 w-full touch-none select-none"
+    className="relative h-8 w-full touch-none select-none"
     onPointerDown={event => startDrag(event, "track")}
     onPointerMove={moveDrag}
     onPointerUp={endDrag}
     onPointerCancel={endDrag}
     onLostPointerCapture={endDrag}
   >
-    <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded bg-white/30" />
-    <div className="absolute top-1/2 h-2 -translate-y-1/2 bg-blue-400" style={{ left: percentage(range[0]), width: percentage(range[1] - range[0]) }} />
-    {renderEndpoint("in")}
-    {renderEndpoint("out")}
-    <button
+    <div className="absolute left-0 right-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-muted" />
+    {valid && <div className="absolute top-1/2 h-1.5 -translate-y-1/2 bg-primary/25" style={{ left: percentage(range[0]), width: percentage(range[1] - range[0]) }} />}
+    {valid && <div className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-l-full bg-primary" style={{ left: percentage(range[0]), width: progressWidth }} />}
+    {valid && renderEndpoint("in")}
+    {valid && renderEndpoint("out")}
+    {valid && <button
       type="button"
       role="slider"
       aria-label="Playback position"
       aria-orientation="horizontal"
       aria-valuemin={range[0]}
       aria-valuemax={range[1]}
-      aria-valuenow={Math.max(range[0], Math.min(range[1], current))}
-      aria-valuetext={formatTime(current)}
+      aria-valuenow={currentPosition}
+      aria-valuetext={formatTime(currentPosition)}
       onPointerDown={event => startDrag(event, "playhead")}
       onPointerMove={moveDrag}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onLostPointerCapture={endDrag}
       onKeyDown={event => handleKey(event, "playhead")}
-      className="absolute top-1/2 z-30 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-300 ring-2 ring-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-      style={{ left: percentage(Math.max(range[0], Math.min(range[1], current))) }}
-    />
+      className="absolute top-1/2 z-30 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-transparent p-0 focus-visible:outline-hidden focus-visible:ring-4 focus-visible:ring-ring/50"
+      style={{ left: percentage(currentPosition) }}
+    >
+      <span className="block size-4 shrink-0 rounded-full border border-primary bg-background shadow-sm transition-[color,box-shadow] hover:ring-4" />
+    </button>}
   </div>;
 }

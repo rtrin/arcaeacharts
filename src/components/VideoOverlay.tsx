@@ -16,18 +16,15 @@ export const VideoOverlay = ({ videoId, isOpen, onClose }: VideoOverlayProps) =>
   const [isMobile, setIsMobile] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [readyVideoId, setReadyVideoId] = useState<string | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSlider, setShowSlider] = useState(true);
   const onTimeChange = useCallback((time: number) => setCurrentTime(time), []);
-  const isReady = isOpen && readyVideoId === videoId;
   const { range, enabled, setEndpoint, seek, handleEnded } = usePlaybackRange({
     playerRef,
     duration,
     videoId,
     isOpen,
     isPlaying,
-    isReady,
     currentTime,
     onTimeChange,
   });
@@ -44,7 +41,6 @@ export const VideoOverlay = ({ videoId, isOpen, onClose }: VideoOverlayProps) =>
   useEffect(() => {
     setCurrentTime(0);
     setDuration(0);
-    setReadyVideoId(null);
   }, [videoId, isOpen]);
 
   useEffect(() => {
@@ -72,14 +68,21 @@ export const VideoOverlay = ({ videoId, isOpen, onClose }: VideoOverlayProps) =>
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isReady) return;
-    const interval = window.setInterval(() => {
+    if (!isOpen) return;
+    const updateDuration = () => {
       const player = playerRef.current;
       if (!player) return;
-      if (Number.isFinite(player.duration) && player.duration > 0) setDuration(player.duration);
+      if (Number.isFinite(player.duration) && player.duration > 0) {
+        setDuration(player.duration);
+      }
+    };
+
+    updateDuration();
+    const interval = window.setInterval(() => {
+      updateDuration();
     }, 500);
     return () => window.clearInterval(interval);
-  }, [isReady, videoId]);
+  }, [isOpen, videoId]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -97,7 +100,6 @@ export const VideoOverlay = ({ videoId, isOpen, onClose }: VideoOverlayProps) =>
   const handleClose = () => {
     setCurrentTime(0);
     setDuration(0);
-    setReadyVideoId(null);
     setPlaybackRate(1);
     setIsPlaying(false);
     setShowSlider(true);
@@ -126,7 +128,6 @@ export const VideoOverlay = ({ videoId, isOpen, onClose }: VideoOverlayProps) =>
           playing={isPlaying}
           playbackRate={playbackRate}
           controls={false}
-          onReady={() => setReadyVideoId(videoId)}
           onEnded={handleEnded}
           style={{ pointerEvents: "none" }}
         />
@@ -173,7 +174,7 @@ export const VideoOverlay = ({ videoId, isOpen, onClose }: VideoOverlayProps) =>
         <Button onClick={() => setPlaybackRate(value => Math.min(2, value + 0.25))} variant="secondary" size="sm" className={`bg-black/70 hover:bg-black/90 text-white border border-white/20 ${isMobile ? "text-xs px-2 py-1 min-h-0 h-6" : ""}`}>+0.25</Button>
       </div>
 
-      {showSlider && enabled && (
+      {showSlider && (
         <div className="absolute bottom-6 left-8 right-8 z-50">
           <div className="flex items-center gap-4">
             <span className="text-white text-sm font-mono bg-black/50 px-2 py-1 rounded">{formatTime(currentTime)}</span>

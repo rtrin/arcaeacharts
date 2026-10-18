@@ -10,7 +10,6 @@ interface PlaybackRangeOptions {
   videoId: string;
   isOpen: boolean;
   isPlaying: boolean;
-  isReady: boolean;
   currentTime: number;
   onTimeChange: (time: number) => void;
 }
@@ -30,7 +29,6 @@ export function usePlaybackRange({
   videoId,
   isOpen,
   isPlaying,
-  isReady,
   currentTime,
   onTimeChange,
 }: PlaybackRangeOptions) {
@@ -82,11 +80,11 @@ export function usePlaybackRange({
   }, [duration, enabled, range, playerRef, issueSeek]);
 
   const handleEnded = useCallback(() => {
-    if (!isOpen || !isReady || !enabled || !playingRef.current || range[1] <= range[0]) return;
+    if (!isOpen || !enabled || !playingRef.current || range[1] <= range[0]) return;
     issueSeek(range[0]);
     const player = playerRef.current;
     if (player) void player.play().catch(() => undefined);
-  }, [isOpen, isReady, enabled, range, issueSeek, playerRef]);
+  }, [isOpen, enabled, range, issueSeek, playerRef]);
 
   useEffect(() => {
     const key = `${isOpen ? "open" : "closed"}:${videoId}`;
@@ -97,8 +95,9 @@ export function usePlaybackRange({
       loopArmed.current = true;
       setRange([0, 0]);
       setEnabled(false);
+      return;
     }
-    if (!isOpen || !isReady || !Number.isFinite(duration) || duration <= 0) {
+    if (!isOpen || !Number.isFinite(duration) || duration <= 0) {
       setEnabled(false);
       return;
     }
@@ -108,10 +107,10 @@ export function usePlaybackRange({
       ? [Math.max(0, Math.min(start, duration - gap)), Math.min(duration, Math.max(start + gap, end))]
       : [0, duration]);
     setEnabled(true);
-  }, [duration, videoId, isOpen, isReady]);
+  }, [duration, videoId, isOpen]);
 
   useEffect(() => {
-    if (!isOpen || !isReady) return;
+    if (!isOpen) return;
     const interval = window.setInterval(() => {
       const player = playerRef.current;
       if (!player || !Number.isFinite(player.currentTime)) return;
@@ -149,7 +148,7 @@ export function usePlaybackRange({
       void player.play().catch(() => undefined);
     }, 75);
     return () => window.clearInterval(interval);
-  }, [isOpen, isReady, playerRef, onTimeChange, enabled, isPlaying, range, issueSeek]);
+  }, [isOpen, playerRef, onTimeChange, enabled, isPlaying, range, issueSeek]);
 
   return { range, enabled, setEndpoint, seek, handleEnded };
 }
