@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { PracticeBookmark } from "@/lib/practice-bookmarks";
-import { normalizePlaybackRange, shouldRepeatPlayback, type PlaybackRange } from "@/lib/playback-range";
+import { normalizePlaybackRange, resolveManualSeek, shouldRepeatPlayback, type PlaybackRange } from "@/lib/playback-range";
 export type { PlaybackRange } from "@/lib/playback-range";
 
 type PlayerClock = Pick<HTMLVideoElement, "currentTime" | "duration" | "play">;
@@ -61,12 +61,20 @@ export function usePlaybackRange({
   }, [playerRef, onTimeChange]);
 
   const seek = useCallback((time: number) => {
-    if (!Number.isFinite(time)) return;
-    const target = enabled
-      ? Math.max(range[0], Math.min(range[1], time))
-      : Math.max(0, time);
-    issueSeek(target);
-  }, [enabled, range, issueSeek]);
+    const resolution = resolveManualSeek(time, duration, range, enabled, activeRangeId !== null);
+    if (!resolution) return;
+    if (resolution.clearSelectedBookmark) {
+      edited.current = false;
+      pending.current = null;
+      loopArmed.current = true;
+      setRangeSelected(false);
+      setActiveRangeId(null);
+      setActiveRangeBookmark(null);
+      setLoopEnabled(false);
+      setRange([0, duration]);
+    }
+    issueSeek(resolution.target);
+  }, [duration, enabled, range, activeRangeId, issueSeek]);
 
   const setEndpoint = useCallback((endpoint: 0 | 1, value: number) => {
     if (!enabled || !Number.isFinite(value)) return;

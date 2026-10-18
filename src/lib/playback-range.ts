@@ -1,5 +1,26 @@
 export type PlaybackRange = [number, number];
 
+export interface ManualSeekResolution {
+  target: number;
+  clearSelectedBookmark: boolean;
+}
+
+export function resolveManualSeek(
+  time: number,
+  duration: number,
+  range: PlaybackRange,
+  rangeEnabled: boolean,
+  hasSelectedBookmark: boolean,
+): ManualSeekResolution | null {
+  if (!Number.isFinite(time)) return null;
+  const maximum = Number.isFinite(duration) && duration > 0 ? duration : Number.POSITIVE_INFINITY;
+  if (hasSelectedBookmark && (time < range[0] || time >= range[1])) {
+    return { target: Math.max(0, Math.min(maximum, time)), clearSelectedBookmark: true };
+  }
+  const target = rangeEnabled ? Math.max(range[0], Math.min(range[1], time)) : Math.max(0, time);
+  return { target, clearSelectedBookmark: false };
+}
+
 export function normalizePlaybackRange(start: number, end: number, duration: number): PlaybackRange | null {
   if (![start, end, duration].every(Number.isFinite) || duration <= 0 || end <= start) return null;
   const gap = Math.min(0.25, duration / 2);

@@ -166,7 +166,7 @@ export function PracticeBookmarksPanel({
       aria-label="Practice bookmarks"
       onKeyDown={handleKeyDown}
       data-allow-click
-      className="absolute left-4 top-16 z-50 flex max-h-[min(68vh,calc(100vw-5rem),34rem)] w-[min(21rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-white/15 bg-zinc-950/95 text-white shadow-xl backdrop-blur-md"
+      className="absolute left-4 top-16 z-[70] flex max-h-[min(68vh,calc(100vw-5rem),34rem)] w-[min(21rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-white/15 bg-zinc-950/95 text-white shadow-xl backdrop-blur-md max-sm:top-4 max-sm:max-h-[min(17.5rem,calc(100vw-5rem))]"
     >
       <header className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
         <div className="min-w-0">
