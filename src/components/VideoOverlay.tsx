@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import ReactPlayer from "react-player";
@@ -28,6 +28,27 @@ export const VideoOverlay = ({
   const [duration, setDuration] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSlider, setShowSlider] = useState(true);
+  const [videoWidth, setVideoWidth] = useState(640);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ id: number; x: number; width: number } | null>(null);
+  const clampVideoWidth = useCallback((width: number) => {
+    const stage = stageRef.current;
+    if (!stage) return width;
+    const maxWidth = Math.max(1, Math.min(stage.clientWidth - 16, (stage.clientHeight - 104) * 16 / 9));
+    const minWidth = Math.min(240, maxWidth);
+    return Math.min(Math.max(minWidth, width), maxWidth);
+  }, []);
+  const finishResize = (pointerId: number) => {
+    if (dragRef.current?.id === pointerId) dragRef.current = null;
+  };
+  const syncStageSize = useCallback(() => setVideoWidth((width) => clampVideoWidth(width)), [clampVideoWidth]);
+  const resizeKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const step = e.shiftKey ? 64 : 16;
+    if (!["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"].includes(e.key)) return;
+    e.preventDefault();
+    const direction = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : -1;
+    setVideoWidth((width) => clampVideoWidth(width + direction * step));
+  };
 
   useEffect(() => {
     const checkMobile = () => {
@@ -45,6 +66,24 @@ export const VideoOverlay = ({
 
     checkMobile();
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) { dragRef.current = null; return; }
+    const frame = requestAnimationFrame(() => setVideoWidth(clampVideoWidth(640)));
+    const observer = stageRef.current && typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(syncStageSize)
+      : null;
+    if (stageRef.current) observer?.observe(stageRef.current);
+    window.addEventListener("resize", syncStageSize);
+    window.addEventListener("orientationchange", syncStageSize);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      window.removeEventListener("resize", syncStageSize);
+      window.removeEventListener("orientationchange", syncStageSize);
+      dragRef.current = null;
+    };
+  }, [isOpen, clampVideoWidth, syncStageSize]);
 
   useEffect(() => {
     if (isOpen) {
@@ -244,7 +283,8 @@ export const VideoOverlay = ({
       }
     >
       {/* Video player */}
-      <div className="relative w-full h-full">
+      <div ref={stageRef} className="absolute inset-0 pointer-events-none">
+      <div className="relative pointer-events-auto overflow-visible" style={{ width: videoWidth, maxWidth: "100%", aspectRatio: "16 / 9" }}>
         <ReactPlayer
           ref={playerRef}
           src={`https://www.youtube.com/watch?v=${videoId}`}
@@ -273,7 +313,24 @@ export const VideoOverlay = ({
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => e.preventDefault()}
         />
+      <button type="button" aria-label={`Resize video, ${videoWidth} pixels wide`} title="Drag or use arrow keys to resize" onKeyDown={resizeKey}
+        onPointerDown={(e) => {
+          if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          dragRef.current = { id: e.pointerId, x: isMobile ? e.clientY : e.clientX, width: videoWidth };
+        }}
+        onPointerMove={(e) => {
+          const drag = dragRef.current;
+          if (!drag || drag.id !== e.pointerId) return;
+          const coordinate = isMobile ? e.clientY : e.clientX;
+          setVideoWidth(clampVideoWidth(drag.width + coordinate - drag.x));
+        }}
+        onPointerUp={(e) => finishResize(e.pointerId)} onPointerCancel={(e) => finishResize(e.pointerId)} onLostPointerCapture={(e) => finishResize(e.pointerId)}
+        className="pointer-events-auto absolute -bottom-12 right-0 z-[60] h-11 w-11 cursor-nwse-resize touch-none rounded bg-white/20 text-white ring-1 ring-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">↘</button>
       </div>
+
+
+            </div>
 
       {/* Close button */}
       <div className="absolute top-4 right-4 z-50">
