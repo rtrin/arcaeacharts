@@ -37,7 +37,7 @@ const Index = () => {
 
   const {
     selectedVideo,
-    setSelectedVideo,
+    closeVideo,
     handleChartView
   } = useVideoSelection();
 
@@ -329,12 +329,7 @@ const Index = () => {
                         </Badge>
 
                         <Button
-                          onClick={() =>
-                            handleChartView(
-                              song.title ?? "",
-                              song.difficulty ?? ""
-                            )
-                          }
+                          onClick={() => handleChartView(song)}
                           variant="outline"
                           size="sm"
                           className="text-[10px] sm:text-xs font-medium bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300 text-red-700 w-full justify-center h-7 sm:h-8"
@@ -453,9 +448,10 @@ const Index = () => {
 
       {/* Video Overlay */}
       <VideoOverlay
-        videoId={selectedVideo || ""}
+        videoId={selectedVideo?.videoId || ""}
+        bookmarkScopeKey={selectedVideo?.chartKey || ""}
         isOpen={!!selectedVideo}
-        onClose={() => setSelectedVideo(null)}
+        onClose={closeVideo}
       />
     </div>
   );

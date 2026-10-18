@@ -1,34 +1,68 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import ReactPlayer from "react-player";
+import { PracticeBookmarksPanel } from "@/components/PracticeBookmarksPanel";
+import { usePracticeLoop } from "@/hooks/usePracticeLoop";
+import { usePracticeBookmarks } from "@/hooks/usePracticeBookmarks";
+import {
+  getCurrentPlayerDuration,
+  getFinitePlayerDuration,
+  type BookmarkScope,
+  type PlayerIdentity,
+  type PlayerReadiness,
+  type PracticeBookmark,
+} from "@/lib/practice-bookmarks";
 
 interface VideoOverlayProps {
   videoId: string;
+  bookmarkScopeKey: string;
   isOpen: boolean;
   onClose: () => void;
 }
 
-interface ProgressState {
-  played: number;
-  playedSeconds: number;
-  loaded: number;
-  loadedSeconds: number;
-}
-
 export const VideoOverlay = ({
   videoId,
+  bookmarkScopeKey,
   isOpen,
   onClose,
 }: VideoOverlayProps) => {
   const playerRef = useRef<HTMLVideoElement>(null);
+  const playerGenerationRef = useRef(0);
+  const playerContextRef = useRef<PlayerIdentity | null>(null);
+  const bookmarkButtonRef = useRef<HTMLButtonElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [playerReadiness, setPlayerReadiness] = useState<PlayerReadiness | null>(null);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSlider, setShowSlider] = useState(true);
+  const [showPracticeBookmarks, setShowPracticeBookmarks] = useState(true);
   const [videoWidth, setVideoWidth] = useState(640);
+  const bookmarkContextKey = `${bookmarkScopeKey}\u0000${videoId}`;
+  const currentPlayerDuration = getCurrentPlayerDuration(bookmarkContextKey, playerContextRef.current, playerReadiness);
+  const isPlayerReady = currentPlayerDuration > 0;
+  const attachPlayer = useCallback((player: HTMLVideoElement | null) => {
+    if (playerRef.current === player) return;
+    playerRef.current = player;
+    if (player) {
+      playerContextRef.current = { contextKey: bookmarkContextKey, generation: ++playerGenerationRef.current };
+    } else {
+      playerContextRef.current = null;
+    }
+  }, [bookmarkContextKey]);
+  const bookmarkScope = useMemo<BookmarkScope>(() => ({ scopeKey: bookmarkScopeKey, videoId }), [bookmarkScopeKey, videoId]);
+  const bookmarkStore = usePracticeBookmarks(bookmarkScope);
+  const practiceLoop = usePracticeLoop({
+    playerRef,
+    contextKey: bookmarkContextKey,
+    isOpen,
+    isReady: isPlayerReady,
+    isPlaying,
+    storedBookmarks: bookmarkStore.bookmarks,
+    bookmarksLoaded: bookmarkStore.hasLoaded,
+    onTimeChange: setCurrentTime,
+  });
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ id: number; x: number; width: number } | null>(null);
   const clampVideoWidth = useCallback((width: number) => {
@@ -166,23 +200,44 @@ export const VideoOverlay = ({
     }
   }, [isOpen]);
 
-  // Video time and duration tracking using interval
+  const sampleCurrentPlayer = useCallback((event?: React.SyntheticEvent<HTMLVideoElement>) => {
+    const player = playerRef.current;
+    const attachedPlayer = playerContextRef.current;
+    if (
+      !isOpen || !player || !attachedPlayer || attachedPlayer.contextKey !== bookmarkContextKey ||
+      (event && event.currentTarget !== player)
+    ) return;
+
+    if (Number.isFinite(player.currentTime)) setCurrentTime(player.currentTime);
+    const duration = getFinitePlayerDuration(bookmarkContextKey, attachedPlayer.contextKey, player.duration);
+    if (duration === null) {
+      setPlayerReadiness((current) =>
+        current?.contextKey === attachedPlayer.contextKey && current.generation === attachedPlayer.generation
+          ? null
+          : current,
+      );
+      return;
+    }
+    setPlayerReadiness((current) =>
+      current?.contextKey === attachedPlayer.contextKey &&
+      current.generation === attachedPlayer.generation && current.duration === duration
+        ? current
+        : { ...attachedPlayer, duration },
+    );
+  }, [bookmarkContextKey, isOpen]);
+
+  // Metadata events speed up readiness; polling handles deferred YouTube callbacks and mobile startup.
   useEffect(() => {
     if (!isOpen) return;
+    sampleCurrentPlayer();
+    const interval = window.setInterval(sampleCurrentPlayer, 250);
+    return () => window.clearInterval(interval);
+  }, [isOpen, sampleCurrentPlayer]);
 
-    const interval = setInterval(() => {
-      if (playerRef.current) {
-        if (typeof playerRef.current.currentTime === "number") {
-          setCurrentTime(playerRef.current.currentTime);
-        }
-        if (typeof playerRef.current.duration === "number" && !isNaN(playerRef.current.duration)) {
-          setDuration(playerRef.current.duration);
-        }
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isOpen]);
+  useEffect(() => {
+    setCurrentTime(0);
+    setShowPracticeBookmarks(true);
+  }, [bookmarkContextKey]);
 
   if (!isOpen) return null;
 
@@ -193,21 +248,13 @@ export const VideoOverlay = ({
   const handleRewind = () => {
     const seekTime = 10 * playbackRate;
     const newTime = Math.max(0, currentTime - seekTime);
-    setCurrentTime(newTime);
-
-    if (playerRef.current) {
-      playerRef.current.currentTime = newTime;
-    }
+    practiceLoop.manualSeek(newTime);
   };
 
   const handleForward = () => {
     const seekTime = 10 * playbackRate;
     const newTime = currentTime + seekTime;
-    setCurrentTime(newTime);
-
-    if (playerRef.current) {
-      playerRef.current.currentTime = newTime;
-    }
+    practiceLoop.manualSeek(newTime);
   };
 
   const handleSpeedDecrease25 = () => {
@@ -238,28 +285,49 @@ export const VideoOverlay = ({
 
   const handleClose = () => {
     setCurrentTime(0);
+    setPlayerReadiness(null);
+    setShowPracticeBookmarks(true);
     setPlaybackRate(1);
     setIsPlaying(false);
     setShowSlider(true);
     onClose();
   };
 
-  const handleProgress = (
-    state: ProgressState | React.SyntheticEvent<HTMLVideoElement>
-  ) => {
-    if ("playedSeconds" in state) {
-      setCurrentTime(state.playedSeconds);
-    }
-  };
-
-
-
   const handleSliderChange = (value: number[]) => {
     const newTime = value[0];
-    setCurrentTime(newTime);
-    if (playerRef.current) {
-      playerRef.current.currentTime = newTime;
+    practiceLoop.manualSeek(newTime);
+  };
+
+  const getPlayerTime = () => {
+    if (!isPlayerReady || playerContextRef.current?.contextKey !== bookmarkContextKey) return null;
+    const time = playerRef.current?.currentTime;
+    return typeof time === "number" && Number.isFinite(time) ? time : null;
+  };
+
+  const getPlayerDuration = () => {
+    if (!isPlayerReady || playerContextRef.current?.contextKey !== bookmarkContextKey) return null;
+    const currentDuration = playerRef.current?.duration;
+    return typeof currentDuration === "number" && Number.isFinite(currentDuration) && currentDuration > 0
+      ? currentDuration
+      : null;
+  };
+
+  const selectPracticeBookmark = (bookmark: PracticeBookmark) => {
+    practiceLoop.seekToBookmark(bookmark);
+  };
+
+  const dismissPracticeBookmarks = () => {
+    setShowPracticeBookmarks(false);
+    window.requestAnimationFrame(() => bookmarkButtonRef.current?.focus());
+  };
+
+  const togglePracticeBookmarks = () => {
+    if (showPracticeBookmarks) {
+      dismissPracticeBookmarks();
+      return;
     }
+    setShowPracticeBookmarks(true);
+    window.requestAnimationFrame(() => document.getElementById("practice-bookmarks-panel")?.querySelector("button")?.focus());
   };
 
   const toggleSlider = () => {
@@ -286,14 +354,17 @@ export const VideoOverlay = ({
       <div ref={stageRef} className="absolute inset-0 pointer-events-none">
       <div className="relative pointer-events-auto overflow-visible" style={{ width: videoWidth, maxWidth: "100%", aspectRatio: "16 / 9" }}>
         <ReactPlayer
-          ref={playerRef}
+          key={bookmarkContextKey}
+          ref={attachPlayer}
           src={`https://www.youtube.com/watch?v=${videoId}`}
           width="100%"
           height="100%"
           playing={isPlaying}
           playbackRate={playbackRate}
           controls={false}
-          onProgress={handleProgress}
+          onLoadedMetadata={sampleCurrentPlayer}
+          onDurationChange={sampleCurrentPlayer}
+          onEnded={practiceLoop.handleEnded}
           style={{ pointerEvents: "none" }}
         />
 
@@ -331,6 +402,25 @@ export const VideoOverlay = ({
 
 
             </div>
+
+      {showPracticeBookmarks && (
+        <PracticeBookmarksPanel
+          key={bookmarkContextKey}
+          scope={{ scopeKey: bookmarkScopeKey, videoId }}
+          isPlayerReady={isPlayerReady}
+          onGetCurrentTime={getPlayerTime}
+          onGetDuration={getPlayerDuration}
+          activeRangeId={practiceLoop.activeRangeId}
+          loopEnabled={practiceLoop.loopEnabled}
+          onSelect={selectPracticeBookmark}
+          onToggleLoop={practiceLoop.toggleLoop}
+          onClearRange={practiceLoop.clearRange}
+          onDismiss={dismissPracticeBookmarks}
+          bookmarks={bookmarkStore.bookmarks}
+          storageError={bookmarkStore.storageError}
+          mutate={bookmarkStore.mutate}
+        />
+      )}
 
       {/* Close button */}
       <div className="absolute top-4 right-4 z-50">
@@ -383,6 +473,20 @@ export const VideoOverlay = ({
           }`}
         >
           +{(10 * playbackRate).toFixed(1)}s
+        </Button>
+
+        <Button
+          ref={bookmarkButtonRef}
+          aria-expanded={showPracticeBookmarks}
+          aria-controls="practice-bookmarks-panel"
+          onClick={togglePracticeBookmarks}
+          variant="secondary"
+          size="sm"
+          className={`bg-black/70 hover:bg-black/90 text-white border border-white/20 ${
+            isMobile ? "text-xs px-2 py-1 min-h-0 h-6" : ""
+          }`}
+        >
+          Bookmarks
         </Button>
 
         <Button
@@ -482,14 +586,14 @@ export const VideoOverlay = ({
                 value={[currentTime]}
                 onValueChange={handleSliderChange}
                 min={0}
-                max={duration || 100}
+                max={currentPlayerDuration || 100}
                 step={1}
                 aria-label="Video timeline"
                 className="w-full"
               />
             </div>
             <span className="text-white text-sm font-mono bg-black/50 px-2 py-1 rounded">
-              {formatTime(duration)}
+              {formatTime(currentPlayerDuration)}
             </span>
           </div>
         </div>
