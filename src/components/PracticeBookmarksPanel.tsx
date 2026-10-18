@@ -16,6 +16,7 @@ interface PracticeBookmarksPanelProps {
   onGetCurrentTime: () => number | null;
   onGetDuration: () => number | null;
   activeRangeId: string | null;
+  hasSelectedRange: boolean;
   loopEnabled: boolean;
   onSelect: (bookmark: PracticeBookmark) => void;
   onToggleLoop: (enabled: boolean) => void;
@@ -39,6 +40,7 @@ export function PracticeBookmarksPanel({
   onGetCurrentTime,
   onGetDuration,
   activeRangeId,
+  hasSelectedRange,
   loopEnabled,
   onSelect,
   onToggleLoop,
@@ -183,7 +185,7 @@ export function PracticeBookmarksPanel({
         {storageError && <p role="alert" className="mb-2 rounded bg-red-950/70 p-2 text-red-200">{storageError}</p>}
         {actionError && <p role="alert" className="mb-2 text-amber-200">{actionError}</p>}
 
-        {activeRangeId && (
+      {hasSelectedRange && (
           <div className="mb-3 flex items-center gap-2 rounded border border-violet-300/25 bg-violet-950/50 p-2">
             <span className="mr-auto text-white/80">Range selected · loop {loopEnabled ? "on" : "off"}</span>
             <Button type="button" size="sm" variant={loopEnabled ? "default" : "secondary"} aria-pressed={loopEnabled} onClick={() => onToggleLoop(!loopEnabled)} className="h-7 px-2 text-xs">
