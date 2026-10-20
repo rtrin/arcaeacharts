@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, SyntheticEvent } from "react";
+import type { SyntheticEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { PlaybackRangeTimeline } from "@/components/PlaybackRangeTimeline";
 import { PracticeBookmarksPanel } from "@/components/PracticeBookmarksPanel";
@@ -27,8 +27,6 @@ export const VideoOverlay = ({ videoId, bookmarkScopeKey, isOpen, onClose }: Vid
   const playerGenerationRef = useRef(0);
   const playerContextRef = useRef<PlayerIdentity | null>(null);
   const bookmarkButtonRef = useRef<HTMLButtonElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ id: number; x: number; width: number } | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -36,7 +34,6 @@ export const VideoOverlay = ({ videoId, bookmarkScopeKey, isOpen, onClose }: Vid
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSlider, setShowSlider] = useState(true);
   const [showPracticeBookmarks, setShowPracticeBookmarks] = useState(true);
-  const [videoWidth, setVideoWidth] = useState(640);
   const bookmarkContextKey = `${bookmarkScopeKey}\u0000${videoId}`;
   const currentDuration = getCurrentPlayerDuration(bookmarkContextKey, playerContextRef.current, playerReadiness);
   const isPlayerReady = currentDuration > 0;
@@ -62,45 +59,11 @@ export const VideoOverlay = ({ videoId, bookmarkScopeKey, isOpen, onClose }: Vid
   });
   const { activeRangeBookmark, clearRange } = practiceRange;
 
-  const clampVideoWidth = useCallback((width: number) => {
-    const stage = stageRef.current;
-    if (!stage) return width;
-    const maxWidth = Math.max(1, Math.min(stage.clientWidth - 16, (stage.clientHeight - 104) * 16 / 9));
-    return Math.min(Math.max(Math.min(240, maxWidth), width), maxWidth);
-  }, []);
-  const syncStageSize = useCallback(() => setVideoWidth(width => clampVideoWidth(width)), [clampVideoWidth]);
-  const finishResize = (pointerId: number) => {
-    if (dragRef.current?.id === pointerId) dragRef.current = null;
-  };
-  const resizeKey = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (!["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"].includes(event.key)) return;
-    event.preventDefault();
-    const step = event.shiftKey ? 64 : 16;
-    const direction = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
-    setVideoWidth(width => clampVideoWidth(width + direction * step));
-  };
-
   useEffect(() => {
     const mobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(navigator.userAgent.toLowerCase());
     setIsMobile(mobile);
     if (!mobile) setIsPlaying(true);
   }, []);
-
-  useEffect(() => {
-    if (!isOpen) { dragRef.current = null; return; }
-    const frame = requestAnimationFrame(() => setVideoWidth(clampVideoWidth(640)));
-    const observer = stageRef.current && typeof ResizeObserver !== "undefined" ? new ResizeObserver(syncStageSize) : null;
-    if (stageRef.current) observer?.observe(stageRef.current);
-    window.addEventListener("resize", syncStageSize);
-    window.addEventListener("orientationchange", syncStageSize);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer?.disconnect();
-      window.removeEventListener("resize", syncStageSize);
-      window.removeEventListener("orientationchange", syncStageSize);
-      dragRef.current = null;
-    };
-  }, [isOpen, clampVideoWidth, syncStageSize]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -192,8 +155,7 @@ export const VideoOverlay = ({ videoId, bookmarkScopeKey, isOpen, onClose }: Vid
   const getPlayerDuration = () => isPlayerReady && playerContextRef.current?.contextKey === bookmarkContextKey ? currentDuration : null;
 
   return <div className={`fixed inset-0 z-50 bg-black ${isMobile ? "transform rotate-90 origin-center" : ""}`} style={isMobile ? { width: "100vh", height: "100vw", left: "calc((100vw - 100vh) / 2)", top: "calc((100vh - 100vw) / 2)" } : {}}>
-    <div ref={stageRef} className="absolute inset-0 pointer-events-none">
-      <div className="relative pointer-events-auto overflow-visible" style={{ width: videoWidth, maxWidth: "100%", aspectRatio: "16 / 9" }}>
+    <div className="relative w-full h-full">
         <ReactPlayer
           key={bookmarkContextKey}
           ref={attachPlayer}
@@ -205,21 +167,6 @@ export const VideoOverlay = ({ videoId, bookmarkScopeKey, isOpen, onClose }: Vid
         <div className="absolute inset-0 z-10 bg-transparent" style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none", pointerEvents: "auto" }}
           onTouchStart={event => event.preventDefault()} onTouchMove={event => event.preventDefault()} onTouchEnd={event => event.preventDefault()}
           onMouseDown={event => event.preventDefault()} onClick={event => event.preventDefault()} />
-        <button type="button" aria-label={`Resize video, ${videoWidth} pixels wide`} title="Drag or use arrow keys to resize" onKeyDown={resizeKey}
-          onPointerDown={event => {
-            if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            dragRef.current = { id: event.pointerId, x: isMobile ? event.clientY : event.clientX, width: videoWidth };
-          }}
-          onPointerMove={event => {
-            const drag = dragRef.current;
-            if (!drag || drag.id !== event.pointerId) return;
-            const coordinate = isMobile ? event.clientY : event.clientX;
-            setVideoWidth(clampVideoWidth(drag.width + coordinate - drag.x));
-          }}
-          onPointerUp={event => finishResize(event.pointerId)} onPointerCancel={event => finishResize(event.pointerId)} onLostPointerCapture={event => finishResize(event.pointerId)}
-          className="pointer-events-auto absolute -bottom-12 right-0 z-[60] h-11 w-11 cursor-nwse-resize touch-none rounded bg-white/20 text-white ring-1 ring-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">↘</button>
-      </div>
     </div>
 
     {showPracticeBookmarks && <PracticeBookmarksPanel
